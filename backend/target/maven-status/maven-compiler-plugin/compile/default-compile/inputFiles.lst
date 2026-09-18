@@ -1,0 +1,16 @@
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\config\CorsConfig.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\controller\SincronizacionController.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\dto\ClientePayloadDTO.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\dto\ItemCarritoDTO.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\dto\SyncPushRequestDTO.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\dto\SyncPushResponseDTO.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\dto\VentaPayloadDTO.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\entity\Cliente.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\entity\Producto.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\entity\Venta.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\entity\VentaItem.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\repository\ClienteRepository.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\repository\ProductoRepository.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\repository\VentaRepository.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\service\SincronizacionService.java
+C:\Web\Antigravity\sistema-erp-pos-offline-first\backend\src\main\java\com\toko\erp\TokoErpApplication.java

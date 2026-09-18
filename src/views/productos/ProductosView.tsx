@@ -1,0 +1,517 @@
+/**
+ * ============================================================================
+ * VISTA: CATÁLOGO Y STOCK - DISEÑO MODERN SAAS (ProductosView.tsx)
+ * ============================================================================
+ * TOKO ERP - Panel de inventario con lista de precios dual (Mostrador vs Mayorista),
+ * control de stock actual, umbrales mínimos y código de barras.
+ * ABM: Alta, Baja y Modificación de productos via Dexie.js (IndexedDB).
+ */
+
+import React, { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import {
+  Package,
+  Search,
+  Plus,
+  Barcode,
+  AlertTriangle,
+  Pencil,
+  Trash2,
+  X,
+  Save,
+  AlertCircle,
+  CheckCircle2,
+} from 'lucide-react';
+import { PRODUCTOS_MOCK, Producto, CategoriaProducto } from '../../models';
+import { useProductosController } from '../../controllers/useProductosController';
+
+// ─── Valores iniciales para el formulario ───────────────────────────────────
+const PRODUCTO_VACIO: Omit<Producto, 'id'> = {
+  codigoBarras: '',
+  nombre: '',
+  categoria: 'Almacén',
+  precioVenta: 0,
+  precioMayorista: 0,
+  stock: 0,
+  stockMinimo: 0,
+  imagenUrl: '',
+  unidadMedida: 'UNIDAD',
+};
+
+const CATEGORIAS: CategoriaProducto[] = [
+  'Almacén',
+  'Bebidas',
+  'Lácteos',
+  'Golosinas',
+  'Limpieza',
+  'Fiambres y Quesos',
+];
+
+// ─── Componente: Wrapper de campo de formulario ──────────────────────────────
+interface CampoProps {
+  label: string;
+  children: React.ReactNode;
+}
+const Campo: React.FC<CampoProps> = ({ label, children }) => (
+  <div className="flex flex-col gap-1">
+    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</label>
+    {children}
+  </div>
+);
+
+const inputCls =
+  'px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 outline-hidden focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all w-full';
+
+// ─── Componente: Modal Alta / Edición de Producto ────────────────────────────
+interface ModalProductoProps {
+  producto: Producto | null;
+  onCerrar: () => void;
+}
+
+const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => {
+  const esEdicion = producto !== null;
+  const [form, setForm] = useState<Omit<Producto, 'id'>>(
+    esEdicion ? { ...producto } : { ...PRODUCTO_VACIO }
+  );
+  const { guardarProducto, guardando, error: errorCtrl, setError: setErrorCtrl } = useProductosController();
+  const error = errorCtrl;
+  const setError = setErrorCtrl;
+  const [mensajeExito, setMensajeExito] = useState<string | null>(null);
+
+  const actualizar = (campo: keyof typeof form, valor: string | number) =>
+    setForm((prev) => ({ ...prev, [campo]: valor }));
+
+  const guardar = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    
+    if (!form.nombre.trim()) { setError('El nombre del artículo es obligatorio.'); return; }
+    if (!form.codigoBarras.trim()) { setError('El código de barras es obligatorio.'); return; }
+    try {
+      const payload: Producto = {
+        id: esEdicion ? producto!.id : `prod-${Date.now()}`,
+        ...form,
+        precioVenta: Number(form.precioVenta),
+        precioMayorista: Number(form.precioMayorista),
+        stock: Number(form.stock),
+        stockMinimo: Number(form.stockMinimo),
+      };
+      await guardarProducto(payload);
+      
+      setMensajeExito('✅ Producto guardado correctamente');
+      if (!esEdicion) {
+        setForm({ ...PRODUCTO_VACIO });
+      }
+      
+      setTimeout(() => {
+        setMensajeExito(null);
+      }, 3000);
+      
+    } catch (e) {
+      // Error handled by controller
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onCerrar} />
+
+      {/* Panel modal */}
+      <div className="relative z-10 bg-white rounded-2xl shadow-2xl border border-slate-200/80 w-full max-w-lg overflow-hidden">
+        {/* Encabezado */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-teal-50 to-emerald-50">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-white border border-teal-100 shadow-sm text-teal-600">
+              <Package className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-900">
+                {esEdicion ? 'Editar Artículo' : 'Nuevo Artículo'}
+              </h3>
+              <p className="text-[10px] text-slate-500">
+                {esEdicion ? `ID: ${producto!.id}` : 'Registrar nuevo producto en el catálogo'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onCerrar}
+            className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Cuerpo */}
+        <form onSubmit={guardar}>
+          <div className="px-6 py-5 space-y-4 max-h-[65vh] overflow-y-auto">
+            {mensajeExito && (
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 font-bold animate-in fade-in">
+                <span>{mensajeExito}</span>
+              </div>
+            )}
+            {error && (
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <Campo label="Nombre del artículo">
+                <input
+                  type="text"
+                  value={form.nombre}
+                  onChange={(e) => actualizar('nombre', e.target.value)}
+                  placeholder="Ej: Aceite de Girasol Natura 900ml"
+                  className={inputCls}
+                />
+              </Campo>
+            </div>
+
+            <Campo label="Código de barras (EAN)">
+              <input
+                type="text"
+                value={form.codigoBarras}
+                onChange={(e) => actualizar('codigoBarras', e.target.value)}
+                placeholder="7790070411802"
+                className={inputCls}
+              />
+            </Campo>
+
+            <Campo label="Categoría">
+              <select
+                value={form.categoria}
+                onChange={(e) => actualizar('categoria', e.target.value as CategoriaProducto)}
+                className={inputCls}
+              >
+                {CATEGORIAS.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </Campo>
+
+            <Campo label="Precio Mostrador ($)">
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={form.precioVenta}
+                onChange={(e) => actualizar('precioVenta', e.target.value)}
+                className={inputCls}
+              />
+            </Campo>
+
+            <Campo label="Precio Mayorista ($)">
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={form.precioMayorista}
+                onChange={(e) => actualizar('precioMayorista', e.target.value)}
+                className={inputCls}
+              />
+            </Campo>
+
+            <Campo label="Stock actual (u.)">
+              <input
+                type="number"
+                min={0}
+                value={form.stock}
+                onChange={(e) => actualizar('stock', e.target.value)}
+                className={inputCls}
+              />
+            </Campo>
+
+            <Campo label="Stock mínimo (u.)">
+              <input
+                type="number"
+                min={0}
+                value={form.stockMinimo}
+                onChange={(e) => actualizar('stockMinimo', e.target.value)}
+                className={inputCls}
+              />
+            </Campo>
+
+            <Campo label="Unidad de medida">
+              <select
+                value={form.unidadMedida}
+                onChange={(e) => actualizar('unidadMedida', e.target.value as Producto['unidadMedida'])}
+                className={inputCls}
+              >
+                <option value="UNIDAD">UNIDAD</option>
+                <option value="KG">KG</option>
+                <option value="PACK">PACK</option>
+              </select>
+            </Campo>
+
+            <div className="col-span-2">
+              <Campo label="URL de imagen (opcional)">
+                <input
+                  type="url"
+                  value={form.imagenUrl}
+                  onChange={(e) => actualizar('imagenUrl', e.target.value)}
+                  placeholder="https://..."
+                  className={inputCls}
+                />
+              </Campo>
+            </div>
+          </div>
+          </div>
+
+          {/* Pie */}
+          <div className="flex items-center justify-end gap-2.5 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+          <button
+            type="button"
+            onClick={onCerrar}
+            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={guardando}
+            className="px-5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 disabled:opacity-60 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-teal-600/20 hover:-translate-y-0.5 active:scale-95"
+          >
+            <Save className="h-3.5 w-3.5" />
+            <span>{guardando ? 'Guardando...' : 'Guardar Artículo'}</span>
+          </button>
+        </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ─── Componente: Modal Confirmación de Baja ──────────────────────────────────
+interface ModalEliminarProps {
+  producto: Producto;
+  onCerrar: () => void;
+}
+
+const ModalEliminar: React.FC<ModalEliminarProps> = ({ producto, onCerrar }) => {
+  const { eliminarProducto, eliminando } = useProductosController();
+
+  const confirmarEliminacion = async () => {
+    try {
+      await eliminarProducto(producto.id);
+      onCerrar();
+    } catch (e) {
+      // Error handled by controller
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onCerrar} />
+
+      {/* Panel */}
+      <div className="relative z-10 bg-white rounded-2xl shadow-2xl border border-slate-200/80 w-full max-w-sm overflow-hidden">
+        <div className="px-6 py-5 text-center">
+          <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-rose-50 border border-rose-200 flex items-center justify-center">
+            <Trash2 className="h-5 w-5 text-rose-500" />
+          </div>
+          <h3 className="text-sm font-black text-slate-900 mb-1">Eliminar Artículo</h3>
+          <p className="text-xs text-slate-500 mb-1">¿Confirmás la eliminación de:</p>
+          <p className="text-xs font-bold text-slate-800 mb-4">"{producto.nombre}"?</p>
+          <p className="text-[10px] text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
+            Esta acción no se puede deshacer y eliminará el registro de la base de datos local.
+          </p>
+        </div>
+        <div className="flex items-center gap-2.5 px-6 pb-5">
+          <button
+            type="button"
+            onClick={onCerrar}
+            className="flex-1 px-4 py-2 text-xs font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={confirmarEliminacion}
+            disabled={eliminando}
+            className="flex-1 px-4 py-2 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 disabled:opacity-60 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md shadow-rose-500/20 hover:-translate-y-0.5 active:scale-95"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>{eliminando ? 'Eliminando...' : 'Sí, eliminar'}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Vista Principal ─────────────────────────────────────────────────────────
+export const ProductosView: React.FC = () => {
+  const { productos, mensajeNotificacion } = useProductosController();
+  const [busqueda, setBusqueda] = useState<string>('');
+  const [categoriaFiltro, setCategoriaFiltro] = useState<string>('TODAS');
+
+  // Estado de modales ABM
+  const [modalAlta, setModalAlta] = useState(false);
+  const [productoEditar, setProductoEditar] = useState<Producto | null>(null);
+  const [productoEliminar, setProductoEliminar] = useState<Producto | null>(null);
+
+  const productosFiltrados = productos.filter((p) => {
+    const coincideTexto =
+      p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+      p.codigoBarras.includes(busqueda);
+    const coincideCategoria = categoriaFiltro === 'TODAS' || p.categoria === categoriaFiltro;
+    return coincideTexto && coincideCategoria;
+  });
+
+  return (
+    <div id="vista-productos-modulo" className="flex-1 p-6 bg-slate-50/70 overflow-y-auto space-y-5">
+      {/* ── Modales ABM ── */}
+      {modalAlta && (
+        <ModalProducto producto={null} onCerrar={() => setModalAlta(false)} />
+      )}
+      {productoEditar && (
+        <ModalProducto producto={productoEditar} onCerrar={() => setProductoEditar(null)} />
+      )}
+      {productoEliminar && (
+        <ModalEliminar producto={productoEliminar} onCerrar={() => setProductoEliminar(null)} />
+      )}
+
+      {/* Toast Notificación */}
+      {mensajeNotificacion && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5">
+          <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl shadow-lg shadow-emerald-900/10">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+            <span className="text-sm font-bold text-emerald-800">{mensajeNotificacion}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Cabecera del Módulo */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-lg shadow-teal-900/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5 mb-1">
+            <div className="p-2 rounded-xl bg-teal-50 text-teal-600 border border-teal-100">
+              <Package className="h-5 w-5" />
+            </div>
+            <h2 className="text-lg font-black text-slate-900">Catálogo de Productos e Inventario</h2>
+          </div>
+          <p className="text-xs text-slate-500">
+            Control de existencias físicas, precios diferenciados y códigos EAN de barras.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-teal-600" />
+            <input
+              type="text"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar por descripción o código de barras..."
+              className="pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 outline-hidden focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 w-64 transition-all shadow-2xs"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setModalAlta(true)}
+            className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-teal-600/20 hover:-translate-y-0.5 active:scale-95"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Nuevo Artículo</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Tabla de Artículos */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-lg shadow-teal-900/5 overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-slate-200/80 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <th className="py-3 px-4">Artículo</th>
+              <th className="py-3 px-3">Código de Barras</th>
+              <th className="py-3 px-3">Categoría</th>
+              <th className="py-3 px-4 text-right">Precio Mostrador</th>
+              <th className="py-3 px-4 text-right">Precio Mayorista</th>
+              <th className="py-3 px-4 text-center">Stock Central</th>
+              <th className="py-3 px-4 text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+            {productosFiltrados.map((prod) => {
+              const stockBajo = prod.stock <= prod.stockMinimo;
+              return (
+                <tr key={prod.id} className="hover:bg-teal-50/30 transition-colors group">
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-3">
+                      {prod.imagenUrl ? (
+                        <img
+                          src={prod.imagenUrl}
+                          alt={prod.nombre}
+                          className="h-10 w-10 rounded-xl object-cover border border-slate-200 shrink-0"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-xl bg-slate-100 border border-slate-200 shrink-0 flex items-center justify-center text-slate-400">
+                          <Package className="h-5 w-5" />
+                        </div>
+                      )}
+                      <div>
+                        <span className="font-bold text-slate-900 block">{prod.nombre}</span>
+                        <span className="text-[10px] text-slate-400">Unidad: {prod.unidadMedida}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3 font-mono text-slate-600">
+                    <div className="flex items-center gap-1.5">
+                      <Barcode className="h-3.5 w-3.5 text-teal-600" />
+                      <span className="font-bold text-teal-800">{prod.codigoBarras}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200/80">
+                      {prod.categoria}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                    ${(prod.precioVenta ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="py-3 px-4 text-right font-mono font-black text-teal-700">
+                    ${(prod.precioMayorista ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="py-3 px-4 text-center font-mono">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${
+                      stockBajo
+                        ? 'bg-amber-50 text-amber-900 border-amber-200'
+                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    }`}>
+                      {stockBajo && <AlertTriangle className="h-3 w-3 text-amber-600" />}
+                      <span>{prod.stock} u.</span>
+                    </span>
+                  </td>
+                  {/* Columna Acciones */}
+                  <td className="py-3 px-4 text-center">
+                    <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => setProductoEditar(prod)}
+                        title="Editar artículo"
+                        className="p-1.5 rounded-lg text-slate-400 hover:bg-teal-50 hover:text-teal-700 border border-transparent hover:border-teal-200 transition-all"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProductoEliminar(prod)}
+                        title="Eliminar artículo"
+                        className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 border border-transparent hover:border-rose-200 transition-all"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};

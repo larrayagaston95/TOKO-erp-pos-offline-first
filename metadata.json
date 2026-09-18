@@ -1,0 +1,6 @@
+{
+  "name": "TOKO ERP",
+  "description": "Sistema integral ERP y Punto de Venta offline-first para supermercados, almacenes y distribuidoras con preventa móvil y sincronización en segundo plano.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
