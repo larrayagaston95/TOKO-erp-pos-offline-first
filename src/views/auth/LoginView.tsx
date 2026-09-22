@@ -12,19 +12,17 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Eye, EyeOff, LogIn, AlertCircle, Loader2 } from 'lucide-react';
+import { db } from '../../db';
+import { Empleado } from '../../models';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface LoginViewProps {
   /** Callback que se invoca cuando las credenciales son válidas */
-  alIniciarSesion: () => void;
+  alIniciarSesion: (empleado: Empleado) => void;
 }
 
-// ─── Credenciales estáticas de desarrollo ────────────────────────────────────
-// TODO: Reemplazar por llamada a POST /api/v1/auth/login cuando el backend
-//       implemente autenticación JWT.
-const USUARIO_VALIDO   = 'admin';
-const PASSWORD_VALIDO  = 'admin';
+// ─── Configuraciones ──────────────────────────────────────────────────────────
 const DELAY_SIMULACION = 800; // ms para simular latencia de red
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -60,16 +58,28 @@ export const LoginView: React.FC<LoginViewProps> = ({ alIniciarSesion }) => {
     // Simular latencia de red
     await new Promise(resolve => setTimeout(resolve, DELAY_SIMULACION));
 
-    if (usuario.trim() === USUARIO_VALIDO && password === PASSWORD_VALIDO) {
-      // Credenciales correctas → notificar al padre (App.tsx)
-      alIniciarSesion();
-    } else {
-      setErrorMsg('Usuario o contraseña incorrectos. Verificá tus credenciales.');
+    try {
+      const empleadoEncontrado = await db.empleados
+        .where('usuario').equals(usuario.trim())
+        .first();
+
+      if (empleadoEncontrado && empleadoEncontrado.pinOContrasena === password) {
+        alIniciarSesion(empleadoEncontrado);
+      } else {
+        setErrorMsg('Usuario o contraseña incorrectos. Verificá tus credenciales.');
+        setIntentoFallido(true);
+        setPassword('');
+      }
+    } catch (error) {
+      setErrorMsg('Error interno al consultar la base de datos de empleados.');
       setIntentoFallido(true);
       setPassword('');
+    } finally {
       setCargando(false);
       // Shake animation: se limpia automáticamente
-      setTimeout(() => setIntentoFallido(false), 600);
+      if (intentoFallido) {
+        setTimeout(() => setIntentoFallido(false), 600);
+      }
     }
   };
 

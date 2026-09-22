@@ -47,8 +47,11 @@ interface SyncPushResponse {
 //
 // Para desarrollo local: definir VITE_BACKEND_URL=http://localhost:8080 en .env
 // Para producción: apuntar a la instancia Spring Boot desplegada.
+//
+// Endpoint principal:  /api/sync  (compatible con el backend Spring Boot del proyecto)
+// Endpoint extendido:  /api/v1/sync/push (alias alternativo con versionado)
 const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL as string | undefined) ?? 'http://localhost:8080';
-const SYNC_ENDPOINT = `${BACKEND_URL}/api/v1/sync/push`;
+const SYNC_ENDPOINT = `${BACKEND_URL}/api/sync`;
 
 // ─── Hook principal ───────────────────────────────────────────────────────────
 

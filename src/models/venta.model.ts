@@ -56,6 +56,8 @@ export interface VentaRealizada {
   metodoPago: MetodoPago;             // Medio de pago seleccionado
   estadoSync: EstadoSincronizacion;   // Estado de sincronización en cola local
   vendedor: string;                   // Nombre del cajero o preventista responsable
+  empleadoId?: string;                // ID del empleado (para trazabilidad y reportes)
+  turnoId?: string;                   // ID del turno de caja en el que se generó
 }
 
 /**

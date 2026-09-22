@@ -20,10 +20,10 @@ import {
   AlertCircle,
   Printer,
   ArrowDownCircle,
-  X
+  X,
+  Trash2,
 } from 'lucide-react';
-import { MetodoPago, VentaRealizada } from '../../models';
-import { TicketImpresion } from '../pos/TicketImpresion';
+import { Empleado, MetodoPago, VentaRealizada } from '../../models';
 import { FacturaLegalPdf } from '../pos/FacturaLegalPdf';
 import { TicketComunPdf } from '../pos/TicketComunPdf';
 import { PDFViewer } from '@react-pdf/renderer';
@@ -37,12 +37,20 @@ const METODO_PAGO_VISUAL: Record<MetodoPago, { label: string, color: string, ico
   CUENTA_CORRIENTE: { label: 'Cta. Corriente', color: 'text-amber-600 bg-amber-50 border-amber-200', icon: FileText }
 };
 
-export const VentasView: React.FC = () => {
-  const { historialVentas, totales, registrarRetiroEfectivo } = useVentasController();
+interface VentasViewProps {
+  /** Usuario autenticado (para verificar rol ADMIN en anulaciones). */
+  usuarioAutenticado: Empleado;
+}
+
+export const VentasView: React.FC<VentasViewProps> = ({ usuarioAutenticado }) => {
+  const { historialVentas, totales, registrarRetiroEfectivo, convertirAFactura, anularVenta } = useVentasController();
   const [ticketParaImprimir, setTicketParaImprimir] = useState<VentaRealizada | null>(null);
   const [modalRetiro, setModalRetiro] = useState(false);
   const [montoRetiro, setMontoRetiro] = useState<number | ''>('');
   const [conceptoRetiro, setConceptoRetiro] = useState('Retiro parcial de efectivo');
+  // Estado para anulación de ventas
+  const [ventaParaAnular, setVentaParaAnular] = useState<VentaRealizada | null>(null);
+  const [anulando, setAnulando] = useState(false);
 
   const [modalAfip, setModalAfip] = useState(false);
   const [ventaParaAfip, setVentaParaAfip] = useState<VentaRealizada | null>(null);
@@ -60,6 +68,18 @@ export const VentasView: React.FC = () => {
       setModalRetiro(false);
       setMontoRetiro('');
     }
+  };
+
+  /**
+   * Ejecuta la anulación confirmada de una venta.
+   * Solo disponible para ADMIN.
+   */
+  const confirmarAnulacion = async () => {
+    if (!ventaParaAnular) return;
+    setAnulando(true);
+    await anularVenta(ventaParaAnular.id);
+    setAnulando(false);
+    setVentaParaAnular(null);
   };
 
   const procesarFacturaAfip = async (e: React.FormEvent) => {
@@ -223,6 +243,16 @@ export const VentasView: React.FC = () => {
                           >
                             <Printer className="h-4 w-4" />
                           </button>
+                          {/* Botón Anular: solo visible para ADMIN */}
+                          {usuarioAutenticado.rol === 'ADMIN' && (
+                            <button
+                              onClick={() => setVentaParaAnular(venta)}
+                              title="Anular venta"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -429,6 +459,46 @@ export const VentasView: React.FC = () => {
                 <TicketComunPdf venta={ticketParaImprimir} />
               )}
             </PDFViewer>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================
+          MODAL CONFIRMACIÓN DE ANULACIÓN (Solo ADMIN)
+          =================================================================== */}
+      {ventaParaAnular && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 border border-rose-200/80">
+            <div className="p-5 text-center">
+              <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-rose-50 border border-rose-200 flex items-center justify-center">
+                <Trash2 className="h-6 w-6 text-rose-500" />
+              </div>
+              <h3 className="text-base font-black text-slate-900 mb-1">Anular Venta</h3>
+              <p className="text-xs text-slate-500 mb-1">¿Confirmás la anulación del ticket:</p>
+              <p className="text-sm font-bold text-slate-800 mb-1">#{ventaParaAnular.numeroTicket}</p>
+              <p className="text-xs font-mono text-teal-700 mb-4">${ventaParaAnular.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
+              <div className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2.5 text-left mb-4 space-y-1">
+                <p>⚠️ Esta acción:</p>
+                <p>• Restaurará el <strong>stock</strong> de los productos vendidos.</p>
+                <p>• Registrará un <strong>reverso</strong> en caja si el pago fue en efectivo.</p>
+                <p>• <strong>Eliminará</strong> el ticket del historial.</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setVentaParaAnular(null)}
+                  className="flex-1 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarAnulacion}
+                  disabled={anulando}
+                  className="flex-1 py-2 bg-gradient-to-r from-rose-500 to-rose-600 text-white rounded-xl font-bold text-sm hover:from-rose-400 hover:to-rose-500 disabled:opacity-60 transition-all shadow-md shadow-rose-500/20"
+                >
+                  {anulando ? 'Anulando...' : 'Confirmar Anulación'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

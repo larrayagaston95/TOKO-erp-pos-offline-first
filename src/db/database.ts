@@ -13,7 +13,7 @@
  */
 
 import Dexie, { Table } from 'dexie';
-import { Producto, PRODUCTOS_MOCK, Cliente, CLIENTES_MOCK, VentaRealizada, MovimientoCaja, PagoCuentaCorriente } from '../models';
+import { Producto, PRODUCTOS_MOCK, Cliente, CLIENTES_MOCK, VentaRealizada, MovimientoCaja, PagoCuentaCorriente, TurnoCaja, Empleado, EMPLEADOS_MOCK } from '../models';
 
 /**
  * Estructura de cada elemento en la cola de sincronización Outbox
@@ -39,11 +39,13 @@ export class OmniPosDatabase extends Dexie {
   sync_outbox!: Table<SyncOutboxItem, string>;
   movimientos_caja!: Table<MovimientoCaja, string>;
   pagos_cc!: Table<PagoCuentaCorriente, string>;
+  turnos_caja!: Table<TurnoCaja, string>;
+  empleados!: Table<Empleado, string>;
 
   constructor() {
     super('OmniPosDB');
     
-    // Definición de esquema y claves/índices (Versión incrementada por comprobantes y caja)
+    // Versión 4: Schema anterior (sin turnos)
     this.version(4).stores({
       productos: 'id, codigoBarras, categoria, nombre',
       clientes: 'id, codigo, nombre, tipo, zonaRuta',
@@ -51,6 +53,29 @@ export class OmniPosDatabase extends Dexie {
       sync_outbox: 'id, tipoOperacion, referenciaId, estado, fechaCreacion',
       movimientos_caja: 'id, fechaHora, tipo',
       pagos_cc: 'id, clienteId, fechaHora, estadoSync'
+    });
+
+    // Versión 6: Agrega tabla de empleados
+    this.version(6).stores({
+      productos: 'id, codigoBarras, categoria, nombre',
+      clientes: 'id, codigo, nombre, tipo, zonaRuta',
+      ventas: 'id, numeroTicket, fechaHora, tipoOperacion, estadoSync, turnoId',
+      sync_outbox: 'id, tipoOperacion, referenciaId, estado, fechaCreacion',
+      movimientos_caja: 'id, fechaHora, tipo, turnoId',
+      pagos_cc: 'id, clienteId, fechaHora, estadoSync',
+      turnos_caja: 'id, estado, cajero, fechaApertura',
+      empleados: 'id, usuario, rol'
+    });
+
+    // Seeder automático al crear la base de datos (cuando está vacía)
+    this.on('populate', () => {
+      this.empleados.add({
+        id: 'admin-root',
+        nombre: 'Administrador',
+        usuario: 'admin',
+        pinOContrasena: 'admin',
+        rol: 'ADMIN'
+      });
     });
   }
 }
@@ -66,25 +91,29 @@ export const db = new OmniPosDatabase();
 export async function poblarBaseDeDatosInicial(forzar: boolean = false): Promise<{
   productos: number;
   clientes: number;
+  empleados: number;
 }> {
   const conteoActual = await db.productos.count();
 
   if (conteoActual === 0 || forzar) {
-    await db.transaction('rw', db.productos, db.clientes, async () => {
+    await db.transaction('rw', db.productos, db.clientes, db.empleados, async () => {
       // Limpiamos si es forzado para evitar duplicados o estados inconsistentes
       if (forzar) {
         await db.productos.clear();
         await db.clientes.clear();
+        await db.empleados.clear();
       }
       await db.productos.bulkPut(PRODUCTOS_MOCK);
       await db.clientes.bulkPut(CLIENTES_MOCK);
+      await db.empleados.bulkPut(EMPLEADOS_MOCK);
     });
   }
 
   const productos = await db.productos.count();
   const clientes = await db.clientes.count();
+  const empleados = await db.empleados.count();
 
-  return { productos, clientes };
+  return { productos, clientes, empleados };
 }
 
 /**

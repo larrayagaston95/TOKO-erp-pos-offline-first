@@ -19,9 +19,13 @@ import { PreventaMovilView } from './views/preventa/PreventaMovilView';
 import { ClientesView } from './views/clientes/ClientesView';
 import { ProductosView } from './views/productos/ProductosView';
 import { VentasView } from './views/ventas/VentasView';
+import { ReportesView } from './views/reportes/ReportesView';
+import { CajaView } from './views/caja/CajaView';
 import { ConfiguracionView } from './views/configuracion/ConfiguracionView';
+import { EmpleadosView } from './views/empleados/EmpleadosView';
 import { LoginView } from './views/auth/LoginView';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Empleado } from './models';
 
 // Importación de Controladores de Lógica de Negocio
 import { useRedController } from './controllers/useRedController';
@@ -30,14 +34,11 @@ import { usePreventaController } from './controllers/usePreventaController';
 
 export default function App() {
   /**
-   * Estado de autenticación del operador.
-   * false → muestra LoginView (acceso bloqueado al sistema).
-   * true  → muestra el sistema ERP completo (Sidebar + Topbar + Vistas).
-   *
-   * TODO: Persistir con localStorage o token JWT cuando se integre
-   *       la autenticación real con el backend Spring Boot.
+   * Usuario que ha iniciado sesión en el sistema.
+   * null → muestra LoginView (acceso bloqueado al sistema).
+   * Empleado → muestra el sistema ERP completo (Sidebar + Topbar + Vistas).
    */
-  const [estaAutenticado, setEstaAutenticado] = useState<boolean>(false);
+  const [usuarioAutenticado, setUsuarioAutenticado] = useState<Empleado | null>(null);
 
   // Módulo actualmente activo en el menú lateral
   const [moduloActivo, setModuloActivo] = useState<ModuloActivo>('pos');
@@ -49,8 +50,17 @@ export default function App() {
   const [sidebarColapsado, setSidebarColapsado] = useState<boolean>(false);
 
   /** Callback que recibe LoginView al validar las credenciales correctamente. */
-  const manejarLoginExitoso = () => {
-    setEstaAutenticado(true);
+  const manejarLoginExitoso = (empleado: Empleado) => {
+    setUsuarioAutenticado(empleado);
+  };
+
+  /**
+   * Limpia la sesión del usuario y redirige al Login.
+   * El guard de autenticación detecta el null y renderiza LoginView automáticamente.
+   */
+  const manejarCerrarSesion = () => {
+    setUsuarioAutenticado(null);
+    setModuloActivo('pos'); // Resetea el módulo para el próximo inicio de sesión
   };
 
   // 1. Controlador de Red (Supervisa conectividad real online/offline y cola de sincronización)
@@ -85,6 +95,12 @@ export default function App() {
         return 'Catálogo de Artículos & Inventario';
       case 'configuracion':
         return 'Base de Datos Local & Sincronización';
+      case 'reportes':
+        return 'Dashboard de Ganancias y Estadísticas';
+      case 'caja':
+        return 'Control de Caja y Turnos';
+      case 'empleados':
+        return 'Gestión de Personal & Roles';
       default:
         return 'TOKO ERP';
     }
@@ -93,7 +109,7 @@ export default function App() {
   // ── Guard de autenticación ──────────────────────────────────────────────
   // Si el operador no está autenticado, renderizar EXCLUSIVAMENTE el login.
   // Ningún controlador ni vista del ERP se monta hasta que la sesión sea válida.
-  if (!estaAutenticado) {
+  if (!usuarioAutenticado) {
     return <LoginView alIniciarSesion={manejarLoginExitoso} />;
   }
 
@@ -104,6 +120,8 @@ export default function App() {
         <Sidebar 
           moduloActivo={moduloActivo} 
           alSeleccionarModulo={setModuloActivo} 
+          usuarioActual={usuarioAutenticado}
+          alCerrarSesion={manejarCerrarSesion}
         />
       )}
 
@@ -134,12 +152,13 @@ export default function App() {
           {moduloActivo === 'pos' && (
             <PosView 
               controlador={posController} 
-              estaOnline={redController.estaOnline} 
+              estaOnline={redController.estaOnline}
+              usuarioAutenticado={usuarioAutenticado}
             />
           )}
 
           {moduloActivo === 'ventas' && (
-            <VentasView />
+            <VentasView usuarioAutenticado={usuarioAutenticado} />
           )}
 
           {moduloActivo === 'preventa' && (
@@ -157,12 +176,24 @@ export default function App() {
             <ProductosView />
           )}
 
+          {moduloActivo === 'reportes' && (
+            <ReportesView />
+          )}
+
+          {moduloActivo === 'caja' && (
+            <CajaView usuarioAutenticado={usuarioAutenticado} />
+          )}
+
           {moduloActivo === 'configuracion' && (
             <ConfiguracionView 
               estaOnline={redController.estaOnline} 
               operacionesPendientes={redController.operacionesPendientes} 
               alReiniciarColaSync={redController.reiniciarColaSync} 
             />
+          )}
+
+          {moduloActivo === 'empleados' && (
+            <EmpleadosView />
           )}
         </main>
       </div>

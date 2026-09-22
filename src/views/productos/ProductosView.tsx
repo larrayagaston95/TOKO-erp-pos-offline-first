@@ -7,7 +7,7 @@
  * ABM: Alta, Baja y Modificación de productos via Dexie.js (IndexedDB).
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Package,
@@ -21,7 +21,9 @@ import {
   Save,
   AlertCircle,
   CheckCircle2,
+  TrendingUp,
 } from 'lucide-react';
+import { db } from '../../db';
 import { PRODUCTOS_MOCK, Producto, CategoriaProducto } from '../../models';
 import { useProductosController } from '../../controllers/useProductosController';
 
@@ -32,10 +34,15 @@ const PRODUCTO_VACIO: Omit<Producto, 'id'> = {
   categoria: 'Almacén',
   precioVenta: 0,
   precioMayorista: 0,
+  precioCosto: 0,
   stock: 0,
   stockMinimo: 0,
   imagenUrl: '',
   unidadMedida: 'UNIDAD',
+  proveedor: '',
+  marca: '',
+  rubro: '',
+  subCategoria: '',
 };
 
 const CATEGORIAS: CategoriaProducto[] = [
@@ -256,6 +263,28 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
                 />
               </Campo>
             </div>
+
+            {/* ─── Campos de Categorización Avanzada ─── */}
+            <div className="col-span-2 pt-2 border-t border-slate-100">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-teal-700 mb-3">Categorización Avanzada</p>
+              <div className="grid grid-cols-2 gap-4">
+                <Campo label="Marca">
+                  <input type="text" value={form.marca || ''} onChange={(e) => actualizar('marca', e.target.value)} placeholder="Ej: Coca-Cola" className={inputCls} />
+                </Campo>
+                <Campo label="Proveedor">
+                  <input type="text" value={form.proveedor || ''} onChange={(e) => actualizar('proveedor', e.target.value)} placeholder="Ej: Distribuidora Norte" className={inputCls} />
+                </Campo>
+                <Campo label="Rubro">
+                  <input type="text" value={form.rubro || ''} onChange={(e) => actualizar('rubro', e.target.value)} placeholder="Ej: Lácteos Frescos" className={inputCls} />
+                </Campo>
+                <Campo label="Sub-Categoría">
+                  <input type="text" value={form.subCategoria || ''} onChange={(e) => actualizar('subCategoria', e.target.value)} placeholder="Ej: Aguas con gas" className={inputCls} />
+                </Campo>
+                <Campo label="Precio Costo ($)">
+                  <input type="number" min={0} step={0.01} value={form.precioCosto || 0} onChange={(e) => actualizar('precioCosto', e.target.value)} className={inputCls} />
+                </Campo>
+              </div>
+            </div>
           </div>
           </div>
 
@@ -352,17 +381,75 @@ export const ProductosView: React.FC = () => {
   const [modalAlta, setModalAlta] = useState(false);
   const [productoEditar, setProductoEditar] = useState<Producto | null>(null);
   const [productoEliminar, setProductoEliminar] = useState<Producto | null>(null);
+  const [modalMasivo, setModalMasivo] = useState(false);
+  
+  // Estados del modal de actualización masiva
+  const [filtroMarca, setFiltroMarca] = useState('');
+  const [filtroRubro, setFiltroRubro] = useState('');
+  const [filtroProveedor, setFiltroProveedor] = useState('');
+  const [tipoAjuste, setTipoAjuste] = useState<'%' | '$'>('%');
+  const [valorAjuste, setValorAjuste] = useState<number>(0);
+  const [campoAjuste, setCampoAjuste] = useState<'venta' | 'mayorista' | 'costo' | 'todos'>('todos');
+  const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
+  const [mensajeMasivo, setMensajeMasivo] = useState('');
+
+  /** Calcula los productos que serán afectados por el ajuste masivo. */
+  const productosParaAjuste = useMemo(() => {
+    return productos.filter(p => {
+      const mM = !filtroMarca || (p.marca?.toLowerCase().includes(filtroMarca.toLowerCase()));
+      const mR = !filtroRubro || (p.rubro?.toLowerCase().includes(filtroRubro.toLowerCase()));
+      const mP = !filtroProveedor || (p.proveedor?.toLowerCase().includes(filtroProveedor.toLowerCase()));
+      return mM && mR && mP;
+    });
+  }, [productos, filtroMarca, filtroRubro, filtroProveedor]);
+
+  /**
+   * Aplica el ajuste de precios masivo a los productos filtrados en IndexedDB.
+   */
+  const aplicarAjusteMasivo = async () => {
+    if (valorAjuste === 0 || productosParaAjuste.length === 0) return;
+    setAplicandoMasivo(true);
+    try {
+      await db.transaction('rw', db.productos, async () => {
+        for (const prod of productosParaAjuste) {
+          const calcNuevo = (precio: number) =>
+            tipoAjuste === '%'
+              ? Math.round((precio * (1 + valorAjuste / 100)) * 100) / 100
+              : Math.round((precio + valorAjuste) * 100) / 100;
+
+          const cambios: Partial<Producto> = {};
+          if (campoAjuste === 'venta' || campoAjuste === 'todos') cambios.precioVenta = calcNuevo(prod.precioVenta);
+          if (campoAjuste === 'mayorista' || campoAjuste === 'todos') cambios.precioMayorista = calcNuevo(prod.precioMayorista);
+          if (campoAjuste === 'costo' || campoAjuste === 'todos') cambios.precioCosto = calcNuevo(prod.precioCosto ?? 0);
+          await db.productos.update(prod.id, cambios);
+        }
+      });
+      setMensajeMasivo(`✅ ${productosParaAjuste.length} productos actualizados correctamente.`);
+      setTimeout(() => { setMensajeMasivo(''); setModalMasivo(false); }, 2500);
+    } catch (err) {
+      setMensajeMasivo('❌ Error al aplicar el ajuste. Intente de nuevo.');
+    } finally {
+      setAplicandoMasivo(false);
+    }
+  };
+
+  // Filtro de stock crítico
+  const [verStockCritico, setVerStockCritico] = useState<boolean>(false);
 
   const productosFiltrados = productos.filter((p) => {
     const coincideTexto =
       p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
       p.codigoBarras.includes(busqueda);
     const coincideCategoria = categoriaFiltro === 'TODAS' || p.categoria === categoriaFiltro;
-    return coincideTexto && coincideCategoria;
+    
+    // Si el filtro de stock crítico está activo, solo mostramos los que tienen stock <= stockMinimo
+    const coincideStock = verStockCritico ? p.stock <= p.stockMinimo : true;
+    
+    return coincideTexto && coincideCategoria && coincideStock;
   });
 
   return (
-    <div id="vista-productos-modulo" className="flex-1 p-6 bg-slate-50/70 overflow-y-auto space-y-5">
+    <div id="vista-productos-modulo" className="flex-1 p-6 bg-slate-50/70 flex flex-col min-h-0 gap-5 overflow-hidden">
       {/* ── Modales ABM ── */}
       {modalAlta && (
         <ModalProducto producto={null} onCerrar={() => setModalAlta(false)} />
@@ -372,6 +459,90 @@ export const ProductosView: React.FC = () => {
       )}
       {productoEliminar && (
         <ModalEliminar producto={productoEliminar} onCerrar={() => setProductoEliminar(null)} />
+      )}
+
+      {/* ── Modal Actualización Masiva ── */}
+      {modalMasivo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/80 w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-purple-50">
+              <div className="flex items-center gap-2.5">
+                <TrendingUp className="h-5 w-5 text-indigo-600" />
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Actualización Masiva de Precios</h3>
+                  <p className="text-[10px] text-slate-500">Filtrá por marca, rubro o proveedor y aplicá un ajuste en lote</p>
+                </div>
+              </div>
+              <button onClick={() => setModalMasivo(false)} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 transition-colors"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              {/* Filtros */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Marca</label>
+                  <input type="text" value={filtroMarca} onChange={e => setFiltroMarca(e.target.value)} placeholder="Todas" className={inputCls} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Rubro</label>
+                  <input type="text" value={filtroRubro} onChange={e => setFiltroRubro(e.target.value)} placeholder="Todos" className={inputCls} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Proveedor</label>
+                  <input type="text" value={filtroProveedor} onChange={e => setFiltroProveedor(e.target.value)} placeholder="Todos" className={inputCls} />
+                </div>
+              </div>
+
+              {/* Selector de campo y ajuste */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Campo a ajustar</label>
+                  <select value={campoAjuste} onChange={e => setCampoAjuste(e.target.value as any)} className={inputCls}>
+                    <option value="todos">Todos los precios</option>
+                    <option value="venta">Precio Mostrador</option>
+                    <option value="mayorista">Precio Mayorista</option>
+                    <option value="costo">Precio Costo</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tipo de ajuste</label>
+                  <select value={tipoAjuste} onChange={e => setTipoAjuste(e.target.value as '%' | '$')} className={inputCls}>
+                    <option value="%">Porcentaje (%)</option>
+                    <option value="$">Monto fijo ($)</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Valor de ajuste</label>
+                  <input type="number" step={0.01} value={valorAjuste} onChange={e => setValorAjuste(Number(e.target.value))} className={inputCls} placeholder="0" />
+                </div>
+              </div>
+
+              {/* Preview */}
+              <div className={`flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-bold ${
+                productosParaAjuste.length > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-800' : 'bg-slate-50 border-slate-200 text-slate-500'
+              }`}>
+                <span>{productosParaAjuste.length === productos.length ? '📦 Todos los productos' : `🔍 ${productosParaAjuste.length} productos coindicen`}</span>
+                <span className="text-xs font-medium">{valorAjuste > 0 ? `Ajuste: ${tipoAjuste === '%' ? `+${valorAjuste}%` : `+$${valorAjuste}`}` : 'Ingresá un valor'}</span>
+              </div>
+
+              {mensajeMasivo && <p className="text-sm font-bold text-center text-teal-700">{mensajeMasivo}</p>}
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setModalMasivo(false)} className="flex-1 px-4 py-2.5 text-xs font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={aplicandoMasivo || valorAjuste === 0 || productosParaAjuste.length === 0}
+                  onClick={aplicarAjusteMasivo}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md"
+                >
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  {aplicandoMasivo ? 'Aplicando...' : `Aplicar a ${productosParaAjuste.length} productos`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Toast Notificación */}
@@ -385,7 +556,7 @@ export const ProductosView: React.FC = () => {
       )}
 
       {/* Cabecera del Módulo */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-lg shadow-teal-900/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-lg shadow-teal-900/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
           <div className="flex items-center gap-2.5 mb-1">
             <div className="p-2 rounded-xl bg-teal-50 text-teal-600 border border-teal-100">
@@ -411,6 +582,26 @@ export const ProductosView: React.FC = () => {
           </div>
           <button
             type="button"
+            onClick={() => setVerStockCritico(!verStockCritico)}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm border ${
+              verStockCritico 
+                ? 'bg-amber-100 text-amber-800 border-amber-300 ring-2 ring-amber-500/20' 
+                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            <AlertTriangle className={`h-4 w-4 ${verStockCritico ? 'text-amber-600' : 'text-slate-400'}`} />
+            <span>⚠️ Ver Stock Crítico</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setModalMasivo(true)}
+            className="px-4 py-2 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:-translate-y-0.5"
+          >
+            <TrendingUp className="h-4 w-4" />
+            <span>Actualización Masiva</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setModalAlta(true)}
             className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-teal-600/20 hover:-translate-y-0.5 active:scale-95"
           >
@@ -421,10 +612,11 @@ export const ProductosView: React.FC = () => {
       </div>
 
       {/* Tabla de Artículos */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-lg shadow-teal-900/5 overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-slate-200/80 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-lg shadow-teal-900/5 overflow-hidden flex-1 flex flex-col min-h-0">
+        <div className="flex-1 overflow-y-auto">
+          <table className="w-full text-left border-collapse min-w-[900px]">
+            <thead>
+              <tr className="border-b border-slate-200/80 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               <th className="py-3 px-4">Artículo</th>
               <th className="py-3 px-3">Código de Barras</th>
               <th className="py-3 px-3">Categoría</th>
@@ -476,14 +668,26 @@ export const ProductosView: React.FC = () => {
                     ${(prod.precioMayorista ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </td>
                   <td className="py-3 px-4 text-center font-mono">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${
-                      stockBajo
-                        ? 'bg-amber-50 text-amber-900 border-amber-200'
-                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                    }`}>
-                      {stockBajo && <AlertTriangle className="h-3 w-3 text-amber-600" />}
-                      <span>{prod.stock} u.</span>
-                    </span>
+                    {(() => {
+                      const agotado = prod.stock <= 0;
+                      const stockBajo = prod.stock <= prod.stockMinimo && prod.stock > 0;
+                      const saludable = prod.stock > prod.stockMinimo;
+
+                      return (
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${
+                          agotado
+                            ? 'bg-rose-50 text-rose-900 border-rose-200'
+                            : stockBajo
+                            ? 'bg-amber-50 text-amber-900 border-amber-200'
+                            : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        }`}>
+                          {agotado && <div className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />}
+                          {stockBajo && <div className="h-2 w-2 rounded-full bg-amber-500" />}
+                          {saludable && <div className="h-2 w-2 rounded-full bg-emerald-500" />}
+                          <span>{prod.stock} u.</span>
+                        </span>
+                      );
+                    })()}
                   </td>
                   {/* Columna Acciones */}
                   <td className="py-3 px-4 text-center">

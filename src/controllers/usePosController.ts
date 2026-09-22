@@ -20,14 +20,19 @@ import {
   ItemCarrito, 
   MetodoPago, 
   VentaRealizada,
-  TipoComprobante
+  TipoComprobante,
+  Empleado
 } from '../models';
 import { db } from '../db';
+import { useCajaController } from './useCajaController';
 
-export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: () => void) {
+export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: () => void, usuarioAutenticado?: Empleado | null) {
   // Catálogo local reactivo desde IndexedDB
   const productosDb = useLiveQuery(() => db.productos.toArray(), []);
   const clientesDb = useLiveQuery(() => db.clientes.toArray(), []);
+  
+  // Obtenemos el turno de caja para inyectarlo en las ventas
+  const cajaController = useCajaController();
 
   // Fallback con mocks en caso de carga inicial
   const productos = productosDb && productosDb.length > 0 ? productosDb : PRODUCTOS_MOCK;
@@ -255,6 +260,8 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
       return;
     }
 
+    const turnoId = cajaController.turnoActivo?.id;
+
     // Generación del comprobante de venta
     const numeroAleatorio = Math.floor(1000 + Math.random() * 9000);
     const nuevoTicket: VentaRealizada = {
@@ -270,7 +277,9 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
       metodoPago,
       tipoComprobante: 'TICKET_X',
       estadoSync: estaOnline ? 'SINCRONIZADO' : 'PENDIENTE_SYNC',
-      vendedor: 'Cajero Mostrador 01'
+      vendedor: usuarioAutenticado?.nombre || 'Cajero Desconocido',
+      empleadoId: usuarioAutenticado?.id,
+      turnoId
     };
 
     try {
@@ -330,7 +339,9 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
     estaOnline, 
     alRegistrarVentaOffline, 
     vaciarCarrito, 
-    mostrarMensaje
+    mostrarMensaje,
+    cajaController.turnoActivo?.id,
+    usuarioAutenticado
   ]);
 
   /**

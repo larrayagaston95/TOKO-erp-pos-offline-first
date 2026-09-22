@@ -21,30 +21,38 @@ import {
   Cpu,
   Sparkles,
   Wallet,
-  Building2
+  Building2,
+  BarChart,
+  Banknote,
+  UsersRound,
+  LogOut
 } from 'lucide-react';
+import { Empleado } from '../../models';
 
-export type RolUsuario = 'ADMIN' | 'CAJERO' | 'PREVENTISTA';
+export type RolUsuario = 'ADMIN' | 'CAJERO' | 'PREVENTISTA' | 'VENDEDOR' | 'VENTA_LOGISTICA';
 
-export type ModuloActivo = 'pos' | 'ventas' | 'preventa' | 'clientes' | 'productos' | 'configuracion';
+export type ModuloActivo = 'pos' | 'ventas' | 'preventa' | 'clientes' | 'productos' | 'configuracion' | 'reportes' | 'caja' | 'empleados';
 
 interface SidebarProps {
   moduloActivo: ModuloActivo;
   alSeleccionarModulo: (modulo: ModuloActivo) => void;
+  usuarioActual: Empleado;
+  /** Callback para cerrar la sesión del usuario y regresar al Login. */
+  alCerrarSesion: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ moduloActivo, alSeleccionarModulo }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ moduloActivo, alSeleccionarModulo, usuarioActual, alCerrarSesion }) => {
   // ============================================================================
   // LÓGICA DE MENÚ COLAPSABLE Y ROLES
   // ============================================================================
   // El menú puede ocultarse por completo (manejado desde App.tsx mediante sidebarColapsado)
   // para permitir que la vista de mostrador (POS) ocupe el 100% de la pantalla.
   // Además, se han ocultado los módulos de "Preventa Móvil" y "Base de Datos & Sync"
-  // de la navegación principal para dejar una interfaz 100% comercial y limpia.
-  
-  // Simulación temporal del usuario logueado.
-  // El rol 'CAJERO' limitará la vista a solo las opciones operativas esenciales.
-  const usuarioActual = { rol: 'CAJERO' as RolUsuario };
+  // ----------------------------------------------------------------------------
+  // ROLES: 
+  // 'ADMIN' tiene acceso a todo.
+  // 'VENDEDOR' tiene acceso a POS y Clientes, se le ocultan Reportes, Caja, Empleados y Config.
+  // ----------------------------------------------------------------------------
 
   const itemsMenu: { 
     id: ModuloActivo; 
@@ -58,9 +66,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ moduloActivo, alSeleccionarMod
       id: 'pos', 
       etiqueta: 'Punto de Venta', 
       subtitulo: 'Caja Mostrador & Escáner',
-      icono: Store, 
+      icono: Store,
       badge: 'F1',
-      rolesPermitidos: ['ADMIN', 'CAJERO']
+      rolesPermitidos: ['ADMIN', 'VENDEDOR', 'VENTA_LOGISTICA']
     },
     { 
       id: 'ventas', 
@@ -75,21 +83,44 @@ export const Sidebar: React.FC<SidebarProps> = ({ moduloActivo, alSeleccionarMod
       etiqueta: 'Clientes & Cuentas', 
       subtitulo: 'Cuentas Corrientes & Crédito',
       icono: Users,
-      badge: 'F3',
-      rolesPermitidos: ['ADMIN', 'CAJERO']
+      badge: 'F4',
+      rolesPermitidos: ['ADMIN', 'VENDEDOR', 'VENTA_LOGISTICA']
     },
     { 
       id: 'productos', 
       etiqueta: 'Catálogo & Stock', 
       subtitulo: 'Precios Duales & EAN-13',
       icono: Package,
-      badge: 'F4',
-      rolesPermitidos: ['ADMIN', 'CAJERO']
+      badge: 'F3',
+      rolesPermitidos: ['ADMIN', 'VENTA_LOGISTICA']
+    },
+    { 
+      id: 'reportes', 
+      etiqueta: 'Dashboard', 
+      subtitulo: 'Métricas y Ganancias',
+      icono: BarChart,
+      badge: 'F5',
+      rolesPermitidos: ['ADMIN']
+    },
+    {
+      id: 'caja',
+      etiqueta: 'Control de Caja',
+      subtitulo: 'Apertura, Cierres y Turnos',
+      icono: Banknote,
+      badge: 'F6',
+      rolesPermitidos: ['ADMIN', 'VENDEDOR', 'VENTA_LOGISTICA']
+    },
+    {
+      id: 'empleados',
+      etiqueta: 'Personal & Roles',
+      subtitulo: 'Seguridad y Accesos',
+      icono: UsersRound,
+      rolesPermitidos: ['ADMIN']
     }
   ];
 
   // Filtramos los ítems del menú según el rol del usuario actual
-  const itemsVisibles = itemsMenu.filter(item => item.rolesPermitidos.includes(usuarioActual.rol));
+  const itemsVisibles = itemsMenu.filter(item => item.rolesPermitidos.includes(usuarioActual.rol as any));
 
   return (
     <aside 
@@ -200,6 +231,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ moduloActivo, alSeleccionarMod
           ===================================================================== */}
       <div className="p-3.5 border-t border-slate-100 bg-slate-50/70 text-xs">
         <div className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm shadow-slate-200/40 space-y-2.5">
+          {/* Info de sucursal */}
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2 font-bold text-slate-800 truncate">
               <div className="p-1 rounded-lg bg-teal-50 text-teal-700 border border-teal-100">
@@ -210,6 +242,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ moduloActivo, alSeleccionarMod
             <span className="font-mono text-[10px] text-teal-800 font-extrabold bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/80">
               POS-01
             </span>
+          </div>
+
+          {/* Info del usuario logueado + botón cerrar sesión */}
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div className="p-1 rounded-lg bg-slate-100 text-slate-500">
+                <UsersRound className="h-3 w-3 shrink-0" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold text-slate-700 truncate">{usuarioActual.nombre}</p>
+                <p className="text-[9px] text-slate-400 uppercase tracking-wide">{usuarioActual.rol}</p>
+              </div>
+            </div>
+            <button
+              onClick={alCerrarSesion}
+              title="Cerrar sesión"
+              className="flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-rose-200"
+            >
+              <LogOut className="h-3 w-3 shrink-0" />
+              <span>Salir</span>
+            </button>
           </div>
         </div>
       </div>

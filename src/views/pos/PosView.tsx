@@ -33,21 +33,46 @@ import {
 } from 'lucide-react';
 import { usePosController } from '../../controllers/usePosController';
 import { MetodoPago } from '../../models';
-import { TicketImpresion } from './TicketImpresion';
 import { FacturaLegalPdf } from './FacturaLegalPdf';
 import { TicketComunPdf } from './TicketComunPdf';
 import { PDFViewer } from '@react-pdf/renderer';
+import { useCajaController } from '../../controllers/useCajaController';
+import { Lock, DollarSign, User } from 'lucide-react';
+import { Empleado } from '../../models';
 
 interface PosViewProps {
   controlador: ReturnType<typeof usePosController>;
   estaOnline: boolean;
+  usuarioAutenticado: Empleado;
 }
 
-export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline }) => {
+export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuarioAutenticado }) => {
   const inputBusquedaRef = useRef<HTMLInputElement>(null);
   const [imprimirComoFactura, setImprimirComoFactura] = useState(false);
   const [mostrarVisorPdf, setMostrarVisorPdf] = useState(false);
   const [modoMediaHoja, setModoMediaHoja] = useState(true);
+
+  // ─── Control de Caja: Apertura y Bloqueo ───────────────────────────────
+  const cajaController = useCajaController();
+  const [nombreCajero, setNombreCajero] = useState('');
+  const [montoApertura, setMontoApertura] = useState<number>(0);
+  const [abriendoCaja, setAbriendoCaja] = useState(false);
+
+  // Inyectar el empleado actual en el controlador de caja al abrirla si se quisiera (usamos el nombre del input pero podría pre-llenarse)
+  useEffect(() => {
+    if (usuarioAutenticado && !nombreCajero) {
+      setNombreCajero(usuarioAutenticado.nombre);
+    }
+  }, [usuarioAutenticado, nombreCajero]);
+
+  /** Maneja la apertura de caja desde el modal de bloqueo. */
+  const manejarAperturaCaja = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nombreCajero.trim() || montoApertura < 0) return;
+    setAbriendoCaja(true);
+    await cajaController.abrirCaja(montoApertura, nombreCajero.trim());
+    setAbriendoCaja(false);
+  };
 
   // Mantener el cursor listo en el buscador para escaneo continuo
   useEffect(() => {
@@ -99,8 +124,75 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline }) => 
   return (
     <div 
       id="vista-pos-mostrador" 
-      className="flex-1 flex flex-col lg:flex-row h-[calc(100vh-4rem)] overflow-hidden bg-slate-50/70 text-slate-800 select-none p-4 gap-4"
+      className="flex-1 flex flex-col lg:flex-row h-[calc(100vh-4rem)] overflow-hidden bg-slate-50/70 text-slate-800 select-none p-4 gap-4 relative"
     >
+      {/* =====================================================================
+          OVERLAY: CAJA CERRADA — BLOQUEO TOTAL DEL POS
+          Cuando no hay turno activo, este overlay se superpone bloqueando
+          el acceso a cualquier función del punto de venta.
+          ===================================================================== */}
+      {!cajaController.turnoActivo && (
+        <div className="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200">
+            {/* Cabecera */}
+            <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-8 text-center relative overflow-hidden">
+              <div className="absolute inset-0 opacity-10">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-teal-500 blur-3xl" />
+              </div>
+              <div className="relative z-10">
+                <div className="mx-auto mb-4 h-16 w-16 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center">
+                  <Lock className="h-8 w-8 text-white" />
+                </div>
+                <h2 className="text-2xl font-black text-white mb-1">Caja Cerrada</h2>
+                <p className="text-slate-400 text-sm">
+                  Ingresá tus datos para abrir la caja y comenzar a operar.
+                </p>
+              </div>
+            </div>
+            {/* Formulario de Apertura */}
+            <form onSubmit={manejarAperturaCaja} className="p-6 space-y-5">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5" /> Nombre del Cajero
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={nombreCajero}
+                  onChange={e => setNombreCajero(e.target.value)}
+                  placeholder="Ej: María González"
+                  className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <DollarSign className="h-3.5 w-3.5" /> Monto Inicial / Cambio en Caja ($)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="0.01"
+                  value={montoApertura || ''}
+                  onChange={e => setMontoApertura(Number(e.target.value))}
+                  placeholder="0.00"
+                  className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={abriendoCaja || !nombreCajero.trim()}
+                className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 disabled:opacity-60 text-white py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-teal-600/25 transition-all active:scale-95 cursor-pointer"
+              >
+                <DollarSign className="h-5 w-5" />
+                {abriendoCaja ? 'Abriendo Caja...' : '✅ Abrir Caja y Comenzar'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* =====================================================================
           COLUMNA IZQUIERDA: BUSCADOR TERMINAL, PISTOLA LÁSER Y TABLA DE ITEMS
           ===================================================================== */}
@@ -353,7 +445,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline }) => 
       {/* =====================================================================
           COLUMNA DERECHA: LIQUIDACIÓN, TOTAL GIGANTE, MEDIOS DE PAGO Y VUELTO
           ===================================================================== */}
-      <div className="w-full lg:w-[410px] flex flex-col gap-4 shrink-0 overflow-y-auto">
+      <div className="w-full lg:w-[410px] flex flex-col gap-4 shrink-0 min-h-0">
         
         {/* ===================================================================
             DISPLAY HERO PRINCIPAL: TOTAL GIGANTE EN GRADIENTE SAAS MODERNO
@@ -380,7 +472,8 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline }) => 
           </div>
         </div>
 
-
+        {/* Contenedor scrolleable: selector de cliente, medios de pago, vuelto y botón cobrar */}
+        <div className="flex-1 overflow-y-auto flex flex-col gap-4 min-h-0 pb-1">
 
         {/* ===================================================================
             SELECTOR DE CLIENTE & CUENTA CORRIENTE
@@ -501,6 +594,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline }) => 
           <Receipt className="h-5 w-5" />
           <span>COBRAR TICKET (F12)</span>
         </button>
+        </div>{/* fin contenedor scrolleable */}
       </div>
 
       {/* =====================================================================

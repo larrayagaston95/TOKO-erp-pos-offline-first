@@ -10,6 +10,7 @@ import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { MetodoPago, MovimientoCaja } from '../models';
+import { v4 as uuidv4 } from 'uuid';
 
 export function useVentasController() {
   // Consulta reactiva a la base de datos local (tabla ventas)
@@ -85,9 +86,58 @@ export function useVentasController() {
       const outboxEntries = await db.sync_outbox.where('referenciaId').equals(ventaId).toArray();
       if (outboxEntries.length > 0) {
         const outboxEntry = outboxEntries[0];
-        const payloadModificado = { ...outboxEntry.payload, tipoComprobante: 'FACTURA_AFIP', cliente: clienteModificado };
+        const payloadModificado = { ...outboxEntry.payload, tipoComprobante: 'FACTURA_AFIP' as const, cliente: clienteModificado };
         await db.sync_outbox.update(outboxEntry.id, { payload: payloadModificado });
       }
+    }
+  };
+
+  /**
+   * Anula una venta de forma transaccional:
+   * 1. Restaura el stock de los productos vendidos.
+   * 2. Registra un movimiento de reverso/salida en caja.
+   * 3. Elimina la venta del historial local.
+   * Solo puede ejecutarlo un usuario con rol 'ADMIN'.
+   */
+  const anularVenta = async (ventaId: string): Promise<boolean> => {
+    try {
+      const venta = await db.ventas.get(ventaId);
+      if (!venta) {
+        console.warn('[VentasController] Venta no encontrada:', ventaId);
+        return false;
+      }
+
+      await db.transaction('rw', [db.ventas, db.productos, db.movimientos_caja], async () => {
+        // 1. Restaurar stock de cada producto vendido
+        for (const item of venta.items) {
+          const prod = await db.productos.get(item.producto.id);
+          if (prod) {
+            const stockRestaurado = (prod.stock ?? 0) + item.cantidad;
+            await db.productos.update(item.producto.id, { stock: stockRestaurado });
+          }
+        }
+
+        // 2. Registrar movimiento de reverso si fue en efectivo
+        if (venta.metodoPago === 'EFECTIVO') {
+          const movReverso: MovimientoCaja = {
+            id: uuidv4(),
+            fechaHora: new Date().toISOString(),
+            tipo: 'RETIRO',
+            monto: venta.total,
+            concepto: `ANULACIÓN ticket #${venta.numeroTicket}`,
+            usuario: 'ADMIN',
+          };
+          await db.movimientos_caja.add(movReverso);
+        }
+
+        // 3. Eliminar la venta
+        await db.ventas.delete(ventaId);
+      });
+
+      return true;
+    } catch (error) {
+      console.error('[VentasController] Error al anular la venta:', error);
+      return false;
     }
   };
 
@@ -96,6 +146,7 @@ export function useVentasController() {
     movimientosCaja,
     totales,
     registrarRetiroEfectivo,
-    convertirAFactura
+    convertirAFactura,
+    anularVenta,
   };
 }
