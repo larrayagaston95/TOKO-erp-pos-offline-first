@@ -103,6 +103,11 @@ export const useDashboardController = () => {
       });
     });
 
+    return Array.from(mapaVentas.values())
+      .sort((a, b) => b.cantidadVendida - a.cantidadVendida)
+      .slice(0, 5);
+  }, [ventasFiltradas, productos]);
+
   return {
     filtroFecha,
     setFiltroFecha,

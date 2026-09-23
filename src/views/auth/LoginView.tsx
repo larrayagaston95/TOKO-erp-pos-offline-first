@@ -12,6 +12,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Eye, EyeOff, LogIn, AlertCircle, Loader2 } from 'lucide-react';
+import logoToko from "../../assets/logo-toko.png";
+
 import { db } from '../../db';
 import { Empleado } from '../../models';
 
@@ -28,12 +30,12 @@ const DELAY_SIMULACION = 800; // ms para simular latencia de red
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export const LoginView: React.FC<LoginViewProps> = ({ alIniciarSesion }) => {
-  const [usuario,         setUsuario]         = useState('');
-  const [password,        setPassword]        = useState('');
+  const [usuario, setUsuario] = useState('');
+  const [password, setPassword] = useState('');
   const [mostrarPassword, setMostrarPassword] = useState(false);
-  const [cargando,        setCargando]        = useState(false);
-  const [errorMsg,        setErrorMsg]        = useState('');
-  const [intentoFallido,  setIntentoFallido]  = useState(false);
+  const [cargando, setCargando] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [intentoFallido, setIntentoFallido] = useState(false);
 
   const inputUsuarioRef = useRef<HTMLInputElement>(null);
 
@@ -111,17 +113,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ alIniciarSesion }) => {
 
         {/* ── Cabecera / Logotipo ─────────────────────────────────────────── */}
         <div className="text-center space-y-3">
-          {/* Logotipo tipográfico de marca */}
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-500 flex items-center justify-center shadow-md shadow-teal-500/30">
-              <span className="text-white font-black text-lg leading-none">T</span>
-            </div>
-            <div className="flex flex-col items-start leading-tight">
-              <span className="text-2xl font-black tracking-tight text-slate-900">TOKO</span>
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-600 -mt-0.5">
-                Enterprise ERP
-              </span>
-            </div>
+          {/* Logotipo de marca */}
+          <div className="flex items-center justify-center mb-4">
+            <img src={logoToko} alt="TOKO ERP" className="h-48 w-auto object-contain mb-4" />
           </div>
 
           <div className="space-y-1">
@@ -205,7 +199,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ alIniciarSesion }) => {
               >
                 {mostrarPassword
                   ? <EyeOff className="h-4 w-4" />
-                  : <Eye     className="h-4 w-4" />
+                  : <Eye className="h-4 w-4" />
                 }
               </button>
             </div>

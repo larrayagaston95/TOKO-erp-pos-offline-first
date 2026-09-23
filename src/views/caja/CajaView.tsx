@@ -59,32 +59,12 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
     const exito = await cerrarCaja(montoFisico, notasCierre, modalCierre === 'FINAL');
     setProcesando(false);
     if (exito) {
-      // Recuperar el turno recién cerrado (actualizado) para el PDF
-      const turnoRecienCerrado = todos_los_turnos.find(t => t.estado === 'CERRADA' && !t.fechaCierre?.startsWith('0'));
-      const turnoFinal = todos_los_turnos
-        .filter(t => t.estado === 'CERRADA')
-        .sort((a, b) => new Date(b.fechaCierre ?? '').getTime() - new Date(a.fechaCierre ?? '').getTime())[0];
-
-      if (turnoFinal) {
-        const resumenPdf: ResumenArqueo = {
-          ventasEfectivo: resumenTurnoActivo.ventasEfectivo,
-          ventasDebito: 0,
-          ventasCredito: 0,
-          ventasQr: 0,
-          ventasCuentaCorriente: 0,
-          retiros: resumenTurnoActivo.retiros,
-          cobrosCC: resumenTurnoActivo.cobrosCC,
-          totalVentas: resumenTurnoActivo.totalEsperado,
-          cantidadTickets: 0,
-        };
-        setTurnoParaArqueo({ turno: { ...turnoFinal, montoFinalReal: montoFisico, notas: notasCierre }, resumen: resumenPdf, formato: 'a4' });
-      }
-
       setModalCierre(null);
       setMontoFisico(0);
       setNotasCierre('');
       setToastExito(modalCierre === 'FINAL' ? '✅ Cierre final del día registrado.' : '✅ Turno cerrado correctamente.');
       setTimeout(() => setToastExito(null), 4000);
+      setPestanaActiva('HISTORIAL');
     }
   };
 
@@ -108,7 +88,8 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
     .sort((a, b) => new Date(b.fechaApertura).getTime() - new Date(a.fechaApertura).getTime())
     .slice(0, 10);
 
-    <div id="vista-caja-modulo" className="flex-1 flex flex-col bg-slate-50/70 overflow-hidden relative">
+  return (
+    <div id="vista-caja-modulo" className="flex-1 flex flex-col h-full bg-slate-50/70 overflow-hidden relative">
 
       {/* ===================================================================
           BARRA DE PESTAÑAS (TABS)
@@ -140,7 +121,7 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
         )}
       </div>
 
-      <div className="flex-1 p-6 flex flex-col min-h-0 gap-6 overflow-hidden">
+      <div className="flex flex-col h-full overflow-hidden flex-1 p-6 gap-6">
 
       {/* Toast Notificación */}
       {toastExito && (
@@ -289,7 +270,6 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
             Para habilitar el Punto de Venta, dirigite al POS y abrí la caja ingresando tu nombre y el monto inicial.
           </p>
         </div>
-        </div>
       )}
         </div>
       )}
@@ -412,80 +392,79 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-lg shadow-teal-900/5 overflow-hidden flex-1 flex flex-col min-h-0">
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2 shrink-0">
-              <Calendar className="h-5 w-5 text-indigo-500" />
-              <h3 className="font-black text-slate-800">Detalle de Turnos Rendidos</h3>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto">
-              <table className="w-full text-left border-collapse min-w-[700px]">
-                <thead>
-                  <tr className="border-b border-slate-200/80 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">Fecha Cierre</th>
-                    <th className="py-3 px-4">Cajero</th>
-                    <th className="py-3 px-4 text-right">Inicial</th>
-                    <th className="py-3 px-4 text-right">Esperado</th>
-                    <th className="py-3 px-4 text-right">Físico</th>
-                    <th className="py-3 px-4 text-right">Diferencia</th>
-                    <th className="py-3 px-4 text-center">Arqueo</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                  {turnosCerradosFiltrados.map((turno) => {
-                    const esperado = turno.montoFinalEsperado || 0;
-                    const fisico = turno.montoFinalReal || 0;
-                    const diferencia = fisico - esperado;
+          <div className="flex-1 overflow-y-auto mt-6 bg-white rounded-xl border border-gray-100 shadow-sm">
+            <table className="w-full text-sm text-left">
+              <thead>
+                <tr className="text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50/50">
+                  <th className="py-3 px-4">FECHA</th>
+                  <th className="py-3 px-4">CAJERO</th>
+                  <th className="py-3 px-4 text-center">TIPO (Parcial/Final)</th>
+                  <th className="py-3 px-4 text-right">INICIAL</th>
+                  <th className="py-3 px-4 text-right">ESPERADO</th>
+                  <th className="py-3 px-4 text-right">FÍSICO</th>
+                  <th className="py-3 px-4 text-right">DIFERENCIA</th>
+                  <th className="py-3 px-4 text-center">ACCIONES</th>
+                </tr>
+              </thead>
+              <tbody>
+                {turnosCerradosFiltrados.map((turno) => {
+                  const esperado = turno.montoFinalEsperado || 0;
+                  const fisico = turno.montoFinalReal || 0;
+                  const diferencia = fisico - esperado;
 
-                    return (
-                      <tr key={turno.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="font-bold text-slate-900">
-                            {new Date(turno.fechaCierre!).toLocaleDateString('es-AR')}
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            {new Date(turno.fechaCierre!).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 font-bold text-slate-700">{turno.usuario}</td>
-                        <td className="py-3 px-4 text-right font-mono text-slate-500">{formatearPeso(turno.montoInicial)}</td>
-                        <td className="py-3 px-4 text-right font-mono text-slate-700">{formatearPeso(esperado)}</td>
-                        <td className="py-3 px-4 text-right font-mono font-bold text-indigo-700">{formatearPeso(fisico)}</td>
-                        <td className="py-3 px-4 text-right font-mono font-black">
-                          <span className={diferencia < 0 ? 'text-rose-600 bg-rose-50 px-2 py-1 rounded-md' : diferencia > 0 ? 'text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md' : 'text-slate-400'}>
-                            {diferencia > 0 ? '+' : ''}{formatearPeso(diferencia)}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <button
-                            onClick={() => {
-                              const resumenDummy: ResumenArqueo = {
-                                ventasEfectivo: esperado - turno.montoInicial,
-                                ventasDebito: 0, ventasCredito: 0, ventasQr: 0, ventasCuentaCorriente: 0,
-                                retiros: 0, cobrosCC: 0, totalVentas: esperado - turno.montoInicial,
-                                cantidadTickets: 0
-                              };
-                              setTurnoParaArqueo({ turno, resumen: resumenDummy, formato: 'a4' });
-                            }}
-                            title="Ver Arqueo PDF"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors inline-block"
-                          >
-                            <Printer className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {turnosCerradosFiltrados.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-500 font-medium">
-                        No hay cajas rendidas en el período seleccionado.
+                  return (
+                    <tr key={turno.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-gray-900">
+                          {new Date(turno.fechaCierre!).toLocaleDateString('es-AR')}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(turno.fechaCierre!).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 font-semibold text-gray-700">{turno.cajero || (turno as any).usuario}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`px-2 py-1 rounded text-[10px] font-bold ${turno.tipoCierre === 'FINAL' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {turno.tipoCierre === 'FINAL' ? 'FINAL (Z)' : 'PARCIAL (X)'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono text-gray-500">{formatearPeso(turno.montoInicial)}</td>
+                      <td className="py-3 px-4 text-right font-mono text-gray-700">{formatearPeso(esperado)}</td>
+                      <td className="py-3 px-4 text-right font-mono font-semibold text-indigo-700">{formatearPeso(fisico)}</td>
+                      <td className="py-3 px-4 text-right font-mono font-bold">
+                        <span className={diferencia < 0 ? 'text-rose-600' : 'text-emerald-600'}>
+                          {diferencia > 0 ? '+' : ''}{formatearPeso(diferencia)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => {
+                            const resumenDummy: ResumenArqueo = {
+                              ventasEfectivo: esperado - turno.montoInicial,
+                              ventasDebito: 0, ventasCredito: 0, ventasQr: 0, ventasCuentaCorriente: 0,
+                              retiros: 0, cobrosCC: 0, totalVentas: esperado - turno.montoInicial,
+                              cantidadTickets: 0
+                            };
+                            setTurnoParaArqueo({ turno, resumen: resumenDummy, formato: 'a4' });
+                          }}
+                          title="Ver Arqueo PDF"
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors inline-block"
+                        >
+                          <Printer size={18} />
+                        </button>
                       </td>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  );
+                })}
+                {turnosCerradosFiltrados.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-gray-500 font-medium">
+                      No hay cajas rendidas en el período seleccionado.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

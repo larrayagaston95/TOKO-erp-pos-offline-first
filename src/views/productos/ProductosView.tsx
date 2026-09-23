@@ -715,6 +715,7 @@ export const ProductosView: React.FC = () => {
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
