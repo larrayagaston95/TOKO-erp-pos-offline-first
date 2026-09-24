@@ -30,4 +30,6 @@ export interface TurnoCaja {
   notas?: string;                      // Observaciones del cierre
   estado: EstadoTurno;                 // 'ABIERTA' o 'CERRADA'
   tipoCierre: TipoCierre;              // null = activo, 'PARCIAL' = cambio de turno, 'FINAL' = cierre del día
+  sincronizado?: boolean;              // Estado de sincronización con el backend (true = sincronizado)
+  detalle_billetes?: any;              // Desglose de billetes al momento del cierre
 }

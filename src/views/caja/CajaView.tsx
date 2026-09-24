@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { useCajaController } from '../../controllers/useCajaController';
 import {
   DollarSign, Clock, User, ArrowDownLeft, ArrowUpRight,
-  Lock, CheckCircle2, XCircle, X, AlertTriangle, Banknote, Printer, Calendar, Receipt
+  Lock, CheckCircle2, XCircle, X, AlertTriangle, Banknote, Printer, Calendar, Receipt,
+  ShoppingCart, Wallet, Calculator
 } from 'lucide-react';
 import { PDFViewer } from '@react-pdf/renderer';
 import { ArqueoPdf, ResumenArqueo } from './ArqueoPdf';
 import { ReporteCajasPdf } from '../reportes/ReporteCajasPdf';
 import { TurnoCaja, Empleado } from '../../models';
+import { CalculadoraBilletes } from '../../components/caja/CalculadoraBilletes';
 
 interface CajaViewProps {
   usuarioAutenticado: Empleado;
@@ -38,30 +40,33 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
   const [notasCierre, setNotasCierre] = useState<string>('');
   const [procesando, setProcesando] = useState(false);
   const [toastExito, setToastExito] = useState<string | null>(null);
+  const [mostrarCalculadora, setMostrarCalculadora] = useState(false);
+  const [desgloseBilletes, setDesgloseBilletes] = useState<any>(null);
 
   // Estado para el visor de PDF del arqueo
   const [turnoParaArqueo, setTurnoParaArqueo] = useState<{ turno: TurnoCaja; resumen: ResumenArqueo; formato: 'ticket' | 'a4' } | null>(null);
 
   // Estado para el visor de PDF del reporte general
-  const [mostrarPdfGeneralCajas, setMostrarPdfGeneralCajas] = useState(false);
+  const [formatoPdfGeneral, setFormatoPdfGeneral] = useState<'a4' | 'ticket' | null>(null);
 
   /** Formatea montos en pesos argentinos. */
   const formatearPeso = (monto: number) =>
     `$${monto.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
 
   /**
-   * Ejecuta el cierre del turno y abre el visor de PDF del arqueo.
+   * Ejecuta el cierre del turno.
    */
   const ejecutarCierre = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!modalCierre) return;
     setProcesando(true);
-    const exito = await cerrarCaja(montoFisico, notasCierre, modalCierre === 'FINAL');
+    const exito = await cerrarCaja(montoFisico, notasCierre, modalCierre === 'FINAL', desgloseBilletes);
     setProcesando(false);
     if (exito) {
       setModalCierre(null);
       setMontoFisico(0);
       setNotasCierre('');
+      setDesgloseBilletes(null);
       setToastExito(modalCierre === 'FINAL' ? '✅ Cierre final del día registrado.' : '✅ Turno cerrado correctamente.');
       setTimeout(() => setToastExito(null), 4000);
       setPestanaActiva('HISTORIAL');
@@ -69,27 +74,21 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
   };
 
   /**
-   * Abre el visor PDF para imprimir el arqueo de un turno del historial.
+   * Abre el visor PDF para imprimir el arqueo de un turno del historial individual.
    */
-  const imprimirArqueoHistorico = (turno: TurnoCaja, formato: 'ticket' | 'a4') => {
-    const resumen: ResumenArqueo = {
-      ventasEfectivo: 0, ventasDebito: 0, ventasCredito: 0,
-      ventasQr: 0, ventasCuentaCorriente: 0,
-      retiros: 0, cobrosCC: 0,
-      totalVentas: turno.montoFinalReal ?? 0,
-      cantidadTickets: 0,
+  const imprimirCierreIndividual = (turno: TurnoCaja) => {
+    const esperado = turno.montoFinalEsperado || 0;
+    const resumenDummy: ResumenArqueo = {
+      ventasEfectivo: esperado - turno.montoInicial,
+      ventasDebito: 0, ventasCredito: 0, ventasQr: 0, ventasCuentaCorriente: 0,
+      retiros: 0, cobrosCC: 0, totalVentas: esperado - turno.montoInicial,
+      cantidadTickets: 0
     };
-    setTurnoParaArqueo({ turno, resumen, formato });
+    setTurnoParaArqueo({ turno, resumen: resumenDummy, formato: 'ticket' });
   };
 
-  // Turnos cerrados (historial)
-  const turnosCerrados = todos_los_turnos
-    .filter(t => t.estado === 'CERRADA')
-    .sort((a, b) => new Date(b.fechaApertura).getTime() - new Date(a.fechaApertura).getTime())
-    .slice(0, 10);
-
   return (
-    <div id="vista-caja-modulo" className="flex-1 flex flex-col h-full bg-slate-50/70 overflow-hidden relative">
+    <div id="vista-caja-modulo" className="flex flex-col h-full w-full bg-slate-50">
 
       {/* ===================================================================
           BARRA DE PESTAÑAS (TABS)
@@ -121,7 +120,7 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
         )}
       </div>
 
-      <div className="flex flex-col h-full overflow-hidden flex-1 p-6 gap-6">
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
 
       {/* Toast Notificación */}
       {toastExito && (
@@ -133,341 +132,343 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
         </div>
       )}
 
-      {/* Cabecera */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-lg shadow-teal-900/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
-              <DollarSign className="h-5 w-5" />
-            </div>
-            <h2 className="text-lg font-black text-slate-900">Control de Caja</h2>
-          </div>
-          <p className="text-xs text-slate-500">
-            Gestión de turnos, movimientos de efectivo y cierres de caja.
-          </p>
-        </div>
-        {turnoActivo && (
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-black text-emerald-700 uppercase tracking-wider">Caja Abierta</span>
-            </div>
-          </div>
-        )}
-        {!turnoActivo && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 rounded-full">
-            <Lock className="h-3.5 w-3.5 text-rose-500" />
-            <span className="text-xs font-black text-rose-700 uppercase tracking-wider">Sin Turno Activo</span>
-          </div>
-        )}
-      </div>
-
       {/* ======= CONTENIDO DE LAS PESTAÑAS ======= */}
       
       {pestanaActiva === 'TURNO_ACTUAL' && (
-        <div className="flex-1 overflow-y-auto space-y-6 pr-2">
-          {/* ======= TURNO ACTIVO ======= */}
-          {turnoActivo ? (
-        <>
-          {/* Info del cajero y hora de apertura */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center gap-4">
-              <div className="bg-slate-100 p-3 rounded-xl"><User className="h-5 w-5 text-slate-600" /></div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cajero</p>
-                <p className="font-black text-slate-900">{turnoActivo.cajero}</p>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center gap-4">
-              <div className="bg-slate-100 p-3 rounded-xl"><Clock className="h-5 w-5 text-slate-600" /></div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Apertura</p>
-                <p className="font-black text-slate-900 text-sm">
-                  {new Date(turnoActivo.fechaApertura).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
-                </p>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center gap-4">
-              <div className="bg-blue-50 p-3 rounded-xl"><Banknote className="h-5 w-5 text-blue-600" /></div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Monto Inicial (Cambio)</p>
-                <p className="font-black text-slate-900 text-lg">{formatearPeso(turnoActivo.montoInicial)}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Desglose de Caja en Tiempo Real */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-lg shadow-teal-900/5 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <h3 className="font-black text-slate-800">📊 Estado de Caja en Tiempo Real</h3>
-            </div>
-            <div className="p-6 space-y-3">
-              {/* Monto Inicial */}
-              <div className="flex items-center justify-between py-3 border-b border-slate-100">
-                <span className="text-sm font-bold text-slate-700">Monto Inicial (Cambio)</span>
-                <span className="font-mono font-black text-slate-900">{formatearPeso(turnoActivo.montoInicial)}</span>
-              </div>
-              {/* Ventas en Efectivo */}
-              <div className="flex items-center justify-between py-3 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <div className="p-1 rounded bg-emerald-100"><ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600" /></div>
-                  <span className="text-sm font-bold text-slate-700">(+) Ventas en Efectivo</span>
+        <div className="flex flex-col flex-1 min-h-0 p-4 overflow-y-auto space-y-6">
+          {/* Cabecera Turno Actual */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+            <div>
+              <div className="flex items-center gap-2.5 mb-1">
+                <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+                  <DollarSign className="h-5 w-5" />
                 </div>
-                <span className="font-mono font-black text-emerald-600">{formatearPeso(resumenTurnoActivo.ventasEfectivo)}</span>
+                <h2 className="text-lg font-black text-slate-900">Control de Caja</h2>
               </div>
-              {/* Cobros de CC */}
-              <div className="flex items-center justify-between py-3 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <div className="p-1 rounded bg-blue-100"><ArrowDownLeft className="h-3.5 w-3.5 text-blue-600" /></div>
-                  <span className="text-sm font-bold text-slate-700">(+) Cobros Cuentas Corrientes</span>
-                </div>
-                <span className="font-mono font-black text-blue-600">{formatearPeso(resumenTurnoActivo.cobrosCC)}</span>
-              </div>
-              {/* Retiros */}
-              <div className="flex items-center justify-between py-3 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <div className="p-1 rounded bg-rose-100"><ArrowUpRight className="h-3.5 w-3.5 text-rose-600" /></div>
-                  <span className="text-sm font-bold text-slate-700">(-) Retiros / Gastos</span>
-                </div>
-                <span className="font-mono font-black text-rose-600">-{formatearPeso(resumenTurnoActivo.retiros)}</span>
-              </div>
-              {/* Total Esperado */}
-              <div className="flex items-center justify-between py-4 bg-slate-50 rounded-xl px-4 mt-2">
-                <span className="text-base font-black text-slate-900">= TOTAL ESPERADO EN CAJA</span>
-                <span className="font-mono font-black text-2xl text-slate-900">{formatearPeso(resumenTurnoActivo.totalEsperado)}</span>
-              </div>
+              <p className="text-xs text-slate-500">
+                Gestión de turnos, movimientos de efectivo y cierres de caja.
+              </p>
             </div>
-          </div>
-
-          {/* Botones de Cierre */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button
-              onClick={() => setModalCierre('PARCIAL')}
-              className="flex items-center justify-center gap-3 bg-amber-50 border-2 border-amber-200 hover:bg-amber-100 text-amber-800 rounded-2xl p-5 font-black text-base transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer shadow-sm"
-            >
-              <XCircle className="h-6 w-6 text-amber-600" />
-              Cerrar Turno (Cierre Parcial)
-            </button>
-            {usuarioAutenticado.rol === 'ADMIN' && (
-              <button
-                onClick={() => setModalCierre('FINAL')}
-                className="flex items-center justify-center gap-3 bg-rose-50 border-2 border-rose-200 hover:bg-rose-100 text-rose-800 rounded-2xl p-5 font-black text-base transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer shadow-sm"
-              >
-                <Lock className="h-6 w-6 text-rose-600" />
-                Cierre Final del Día
-              </button>
+            {turnoActivo && (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-xs font-black text-emerald-700 uppercase tracking-wider">Caja Abierta</span>
+                </div>
+              </div>
+            )}
+            {!turnoActivo && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 rounded-full">
+                <Lock className="h-3.5 w-3.5 text-rose-500" />
+                <span className="text-xs font-black text-rose-700 uppercase tracking-wider">Sin Turno Activo</span>
+              </div>
             )}
           </div>
-        </>
-      ) : (
-        /* Sin turno activo */
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-12 text-center">
-          <div className="mx-auto mb-4 w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
-            <Lock className="h-8 w-8 text-slate-400" />
-          </div>
-          <h3 className="text-lg font-black text-slate-700 mb-2">No hay turno activo</h3>
-          <p className="text-sm text-slate-500">
-            Para habilitar el Punto de Venta, dirigite al POS y abrí la caja ingresando tu nombre y el monto inicial.
-          </p>
-        </div>
-      )}
+
+          {/* ======= TURNO ACTIVO ======= */}
+          {turnoActivo ? (
+            <>
+              {/* Info del cajero y hora de apertura */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center gap-4">
+                  <div className="bg-slate-100 p-3 rounded-xl"><User className="h-5 w-5 text-slate-600" /></div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cajero</p>
+                    <p className="font-black text-slate-900">{turnoActivo.cajero}</p>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center gap-4">
+                  <div className="bg-slate-100 p-3 rounded-xl"><Clock className="h-5 w-5 text-slate-600" /></div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Apertura</p>
+                    <p className="font-black text-slate-900 text-sm">
+                      {new Date(turnoActivo.fechaApertura).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center gap-4">
+                  <div className="bg-blue-50 p-3 rounded-xl"><Banknote className="h-5 w-5 text-blue-600" /></div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Monto Inicial (Cambio)</p>
+                    <p className="font-black text-slate-900 text-lg">{formatearPeso(turnoActivo.montoInicial)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Desglose de Caja en Tiempo Real */}
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-lg shadow-teal-900/5 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                  <h3 className="font-black text-slate-800">📊 Estado de Caja en Tiempo Real</h3>
+                </div>
+                <div className="p-6 space-y-3">
+                  <div className="flex items-center justify-between py-3 border-b border-slate-100">
+                    <span className="text-sm font-bold text-slate-700">Monto Inicial (Cambio)</span>
+                    <span className="font-mono font-black text-slate-900">{formatearPeso(turnoActivo.montoInicial)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1 rounded bg-emerald-100"><ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600" /></div>
+                      <span className="text-sm font-bold text-slate-700">(+) Ventas en Efectivo</span>
+                    </div>
+                    <span className="font-mono font-black text-emerald-600">{formatearPeso(resumenTurnoActivo.ventasEfectivo)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1 rounded bg-blue-100"><ArrowDownLeft className="h-3.5 w-3.5 text-blue-600" /></div>
+                      <span className="text-sm font-bold text-slate-700">(+) Cobros Cuentas Corrientes</span>
+                    </div>
+                    <span className="font-mono font-black text-blue-600">{formatearPeso(resumenTurnoActivo.cobrosCC)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1 rounded bg-rose-100"><ArrowUpRight className="h-3.5 w-3.5 text-rose-600" /></div>
+                      <span className="text-sm font-bold text-slate-700">(-) Retiros / Gastos</span>
+                    </div>
+                    <span className="font-mono font-black text-rose-600">-{formatearPeso(resumenTurnoActivo.retiros)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-4 bg-slate-50 rounded-xl px-4 mt-2">
+                    <span className="text-base font-black text-slate-900">= TOTAL ESPERADO EN CAJA</span>
+                    <span className="font-mono font-black text-2xl text-slate-900">{formatearPeso(resumenTurnoActivo.totalEsperado)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botones de Cierre */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => setModalCierre('PARCIAL')}
+                  className="flex items-center justify-center gap-3 bg-amber-50 border-2 border-amber-200 hover:bg-amber-100 text-amber-800 rounded-2xl p-5 font-black text-base transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer shadow-sm"
+                >
+                  <XCircle className="h-6 w-6 text-amber-600" />
+                  Cerrar Turno (Cierre Parcial)
+                </button>
+                {usuarioAutenticado.rol === 'ADMIN' && (
+                  <button
+                    onClick={() => setModalCierre('FINAL')}
+                    className="flex items-center justify-center gap-3 bg-rose-50 border-2 border-rose-200 hover:bg-rose-100 text-rose-800 rounded-2xl p-5 font-black text-base transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer shadow-sm"
+                  >
+                    <Lock className="h-6 w-6 text-rose-600" />
+                    Cierre Final del Día
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-12 text-center">
+              <div className="mx-auto mb-4 w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
+                <Lock className="h-8 w-8 text-slate-400" />
+              </div>
+              <h3 className="text-lg font-black text-slate-700 mb-2">No hay turno activo</h3>
+              <p className="text-sm text-slate-500">
+                Para habilitar el Punto de Venta, dirigite al POS y abrí la caja ingresando tu nombre y el monto inicial.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
       {pestanaActiva === 'HISTORIAL' && usuarioAutenticado.rol === 'ADMIN' && (
-        <div className="flex-1 flex flex-col min-h-0 gap-6">
-          {/* ===================================================================
-              CABECERA Y FILTROS (HISTORIAL)
-              =================================================================== */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-lg shadow-teal-900/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2.5 mb-1">
-                <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100">
-                  <Banknote className="h-5 w-5" />
-                </div>
-                <h2 className="text-lg font-black text-slate-900">
-                  Historial de Cajas (Resumen Gerencial)
-                </h2>
-              </div>
-              <p className="text-xs text-slate-500">
-                Totales acumulados y detalle de turnos cerrados en el período.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 bg-slate-50 p-1.5 rounded-xl border border-slate-200/80 shadow-sm">
-              <Calendar className="h-4 w-4 text-slate-400 ml-2" />
-              <select
-                value={filtroFecha}
-                onChange={(e) => setFiltroFecha(e.target.value as any)}
-                className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none pr-4 cursor-pointer"
-              >
-                <option value="HOY">Hoy</option>
-                <option value="ULTIMOS_7_DIAS">Últimos 7 Días</option>
-                <option value="ESTE_MES">Este Mes</option>
-                <option value="RANGO_PERSONALIZADO">Rango Personalizado...</option>
-              </select>
-            </div>
-          </div>
-
-          {filtroFecha === 'RANGO_PERSONALIZADO' && (
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-wrap gap-4 items-end">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Desde</label>
-                <input 
-                  type="date" 
-                  value={fechaDesde} 
-                  onChange={(e) => setFechaDesde(e.target.value)}
-                  className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Hasta</label>
-                <input 
-                  type="date" 
-                  value={fechaHasta} 
-                  onChange={(e) => setFechaHasta(e.target.value)}
-                  className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm"
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row justify-between gap-4">
-            <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-200/80 shadow-sm">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 ml-2">Tipo de Cierre:</span>
-              <select
-                value={filtroTipoCierre}
-                onChange={(e) => setFiltroTipoCierre(e.target.value as any)}
-                className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 outline-none cursor-pointer"
-              >
-                <option value="TODOS">Todos los Cierres</option>
-                <option value="PARCIALES">Solo Parciales (X)</option>
-                <option value="FINALES">Solo Finales (Z)</option>
-              </select>
-            </div>
-            <button
-              onClick={() => setMostrarPdfGeneralCajas(true)}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-colors"
-            >
-              <Printer className="h-4 w-4" />
-              Imprimir Reporte General
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="bg-white rounded-2xl p-6 shadow-lg shadow-teal-900/5 border border-slate-200/80 flex items-center gap-4">
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-slate-500">
-                <Receipt className="h-7 w-7" />
-              </div>
+        <div className="flex flex-col flex-1 min-h-0 p-4">
+          <div className="flex flex-col flex-1 min-h-0 gap-4 overflow-hidden">
+            {/* CABECERA Y FILTROS (HISTORIAL) */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Esperado Acumulado</p>
-                <p className="text-3xl font-black text-slate-900">
+                <div className="flex items-center gap-2.5 mb-1">
+                  <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100">
+                    <Banknote className="h-5 w-5" />
+                  </div>
+                  <h2 className="text-lg font-black text-slate-900">
+                    Historial de Cajas (Resumen Gerencial)
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Totales acumulados y detalle de turnos cerrados en el período.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 bg-slate-50 p-1.5 rounded-xl border border-slate-200/80 shadow-sm">
+                <Calendar className="h-4 w-4 text-slate-400 ml-2" />
+                <select
+                  value={filtroFecha}
+                  onChange={(e) => setFiltroFecha(e.target.value as any)}
+                  className="bg-transparent border-none text-xs font-bold text-slate-700 outline-none pr-4 cursor-pointer"
+                >
+                  <option value="HOY">Hoy</option>
+                  <option value="ULTIMOS_7_DIAS">Últimos 7 Días</option>
+                  <option value="ESTE_MES">Este Mes</option>
+                  <option value="RANGO_PERSONALIZADO">Rango Personalizado...</option>
+                </select>
+              </div>
+            </div>
+
+            {filtroFecha === 'RANGO_PERSONALIZADO' && (
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-wrap gap-4 items-end shrink-0">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Desde</label>
+                  <input 
+                    type="date" 
+                    value={fechaDesde} 
+                    onChange={(e) => setFechaDesde(e.target.value)}
+                    className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Hasta</label>
+                  <input 
+                    type="date" 
+                    value={fechaHasta} 
+                    onChange={(e) => setFechaHasta(e.target.value)}
+                    className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row justify-between gap-4 shrink-0">
+              <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-slate-200/80 shadow-sm">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 ml-2">Tipo de Cierre:</span>
+                <select
+                  value={filtroTipoCierre}
+                  onChange={(e) => setFiltroTipoCierre(e.target.value as any)}
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                >
+                  <option value="TODOS">Todos los Cierres</option>
+                  <option value="PARCIALES">Solo Parciales (X)</option>
+                  <option value="FINALES">Solo Finales (Z)</option>
+                </select>
+              </div>
+              <button
+                onClick={() => setFormatoPdfGeneral('a4')}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-colors"
+              >
+                <Printer className="h-4 w-4" />
+                Imprimir Reporte General
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 shrink-0">
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="bg-blue-50 p-2 rounded-lg border border-blue-100 text-blue-500">
+                    <ShoppingCart className="h-5 w-5" />
+                  </div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Ventas</p>
+                </div>
+                <p className="text-xl font-black text-slate-900 mt-1">
+                  {formatearPeso(kpisCajas.totalVentas)}
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="bg-amber-50 p-2 rounded-lg border border-amber-100 text-amber-500">
+                    <Wallet className="h-5 w-5" />
+                  </div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Inicial Acumulado</p>
+                </div>
+                <p className="text-xl font-black text-slate-900 mt-1">
+                  {formatearPeso(kpisCajas.totalInicial)}
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 text-slate-500">
+                    <Receipt className="h-5 w-5" />
+                  </div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Esperado</p>
+                </div>
+                <p className="text-xl font-black text-slate-900 mt-1">
                   {formatearPeso(kpisCajas.totalEsperado)}
                 </p>
               </div>
-            </div>
 
-            <div className="bg-white rounded-2xl p-6 shadow-lg shadow-teal-900/5 border border-slate-200/80 flex items-center gap-4">
-              <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 text-indigo-500">
-                <Banknote className="h-7 w-7" />
-              </div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Físico Rendido (Real)</p>
-                <p className="text-3xl font-black text-indigo-600">
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="bg-indigo-50 p-2 rounded-lg border border-indigo-100 text-indigo-500">
+                    <Banknote className="h-5 w-5" />
+                  </div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Físico Rendido</p>
+                </div>
+                <p className="text-xl font-black text-indigo-600 mt-1">
                   {formatearPeso(kpisCajas.totalFisico)}
                 </p>
               </div>
-            </div>
 
-            <div className="bg-white rounded-2xl p-6 shadow-lg shadow-teal-900/5 border border-slate-200/80 flex items-center gap-4">
-              <div className={`p-4 rounded-xl border ${kpisCajas.diferenciaTotal < 0 ? 'bg-rose-50 border-rose-100 text-rose-500' : kpisCajas.diferenciaTotal > 0 ? 'bg-emerald-50 border-emerald-100 text-emerald-500' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-                {kpisCajas.diferenciaTotal < 0 ? <ArrowDownLeft className="h-7 w-7" /> : <ArrowUpRight className="h-7 w-7" />}
-              </div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Diferencia Total</p>
-                <p className={`text-3xl font-black ${kpisCajas.diferenciaTotal < 0 ? 'text-rose-600' : kpisCajas.diferenciaTotal > 0 ? 'text-emerald-600' : 'text-slate-500'}`}>
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <div className={`p-2 rounded-lg border ${kpisCajas.diferenciaTotal < 0 ? 'bg-rose-50 border-rose-100 text-rose-500' : kpisCajas.diferenciaTotal > 0 ? 'bg-emerald-50 border-emerald-100 text-emerald-500' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                    {kpisCajas.diferenciaTotal < 0 ? <ArrowDownLeft className="h-5 w-5" /> : <ArrowUpRight className="h-5 w-5" />}
+                  </div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Diferencia Neta</p>
+                </div>
+                <p className={`text-xl font-black mt-1 ${kpisCajas.diferenciaTotal < 0 ? 'text-rose-600' : kpisCajas.diferenciaTotal > 0 ? 'text-emerald-600' : 'text-slate-500'}`}>
                   {kpisCajas.diferenciaTotal > 0 ? '+' : ''}{formatearPeso(kpisCajas.diferenciaTotal)}
                 </p>
               </div>
             </div>
-          </div>
 
-          <div className="flex-1 overflow-y-auto mt-6 bg-white rounded-xl border border-gray-100 shadow-sm">
-            <table className="w-full text-sm text-left">
-              <thead>
-                <tr className="text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50/50">
-                  <th className="py-3 px-4">FECHA</th>
-                  <th className="py-3 px-4">CAJERO</th>
-                  <th className="py-3 px-4 text-center">TIPO (Parcial/Final)</th>
-                  <th className="py-3 px-4 text-right">INICIAL</th>
-                  <th className="py-3 px-4 text-right">ESPERADO</th>
-                  <th className="py-3 px-4 text-right">FÍSICO</th>
-                  <th className="py-3 px-4 text-right">DIFERENCIA</th>
-                  <th className="py-3 px-4 text-center">ACCIONES</th>
-                </tr>
-              </thead>
-              <tbody>
-                {turnosCerradosFiltrados.map((turno) => {
-                  const esperado = turno.montoFinalEsperado || 0;
-                  const fisico = turno.montoFinalReal || 0;
-                  const diferencia = fisico - esperado;
+            {/* TABLA DE CIERRES INDIVIDUALES CON SCROLL */}
+            <div className="mt-2 flex-1 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-sm min-h-0">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 text-gray-500 uppercase font-semibold text-xs sticky top-0 shadow-sm z-10">
+                  <tr>
+                    <th className="py-3 px-4">Fecha y Hora</th>
+                    <th className="py-3 px-4">Cajero</th>
+                    <th className="py-3 px-4 text-center">Tipo</th>
+                    <th className="py-3 px-4 text-right">Esperado</th>
+                    <th className="py-3 px-4 text-right">Físico</th>
+                    <th className="py-3 px-4 text-right">Diferencia</th>
+                    <th className="py-3 px-4 text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {(turnosCerradosFiltrados || []).length > 0 ? (
+                    (turnosCerradosFiltrados || []).map((turno) => {
+                      const esperado = turno.montoFinalEsperado || 0;
+                      const fisico = turno.montoFinalReal || 0;
+                      const diferencia = fisico - esperado;
 
-                  return (
-                    <tr key={turno.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-gray-900">
-                          {new Date(turno.fechaCierre!).toLocaleDateString('es-AR')}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(turno.fechaCierre!).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-gray-700">{turno.cajero || (turno as any).usuario}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`px-2 py-1 rounded text-[10px] font-bold ${turno.tipoCierre === 'FINAL' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {turno.tipoCierre === 'FINAL' ? 'FINAL (Z)' : 'PARCIAL (X)'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-gray-500">{formatearPeso(turno.montoInicial)}</td>
-                      <td className="py-3 px-4 text-right font-mono text-gray-700">{formatearPeso(esperado)}</td>
-                      <td className="py-3 px-4 text-right font-mono font-semibold text-indigo-700">{formatearPeso(fisico)}</td>
-                      <td className="py-3 px-4 text-right font-mono font-bold">
-                        <span className={diferencia < 0 ? 'text-rose-600' : 'text-emerald-600'}>
-                          {diferencia > 0 ? '+' : ''}{formatearPeso(diferencia)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => {
-                            const resumenDummy: ResumenArqueo = {
-                              ventasEfectivo: esperado - turno.montoInicial,
-                              ventasDebito: 0, ventasCredito: 0, ventasQr: 0, ventasCuentaCorriente: 0,
-                              retiros: 0, cobrosCC: 0, totalVentas: esperado - turno.montoInicial,
-                              cantidadTickets: 0
-                            };
-                            setTurnoParaArqueo({ turno, resumen: resumenDummy, formato: 'a4' });
-                          }}
-                          title="Ver Arqueo PDF"
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors inline-block"
-                        >
-                          <Printer size={18} />
-                        </button>
+                      return (
+                        <tr key={turno.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="py-3 px-4">{new Date(turno.fechaCierre || turno.fechaApertura).toLocaleString('es-AR')}</td>
+                          <td className="py-3 px-4">{turno.cajero || (turno as any).usuario || 'Cajero Central'}</td>
+                          <td className="py-3 px-4 text-center">
+                            <span className={`px-2 py-1 rounded-md text-xs font-bold tracking-wider ${turno.tipoCierre === 'FINAL' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
+                              {turno.tipoCierre === 'FINAL' ? 'FINAL' : 'PARCIAL'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">${esperado.toFixed(2)}</td>
+                          <td className="py-3 px-4 text-right font-medium">${fisico.toFixed(2)}</td>
+                          <td className={`py-3 px-4 text-right font-bold ${diferencia < 0 ? 'text-red-500' : 'text-green-500'}`}>
+                            {diferencia > 0 ? '+' : ''}${diferencia.toFixed(2)}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <button
+                              onClick={() => imprimirCierreIndividual(turno)}
+                              className="text-gray-400 hover:text-blue-600 transition-colors inline-flex p-1 cursor-pointer"
+                              title="Imprimir Comprobante"
+                            >
+                              <Printer size={18} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-gray-500">
+                        No hay cierres registrados en el período seleccionado.
                       </td>
                     </tr>
-                  );
-                })}
-                {turnosCerradosFiltrados.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="py-12 text-center text-gray-500 font-medium">
-                      No hay cajas rendidas en el período seleccionado.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
+      </div>
 
       {/* ===== MODAL DE CIERRE ===== */}
       {modalCierre && (
@@ -509,6 +510,16 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
                   className="w-full text-center text-4xl font-mono font-black text-slate-800 border-b-2 border-slate-200 focus:border-indigo-500 outline-none pb-2 bg-transparent transition-colors"
                   placeholder="0.00"
                 />
+                <div className="flex justify-center mt-2 mb-1">
+                  <button
+                    type="button"
+                    onClick={() => setMostrarCalculadora(true)}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors cursor-pointer border border-slate-200 shadow-sm"
+                  >
+                    <Calculator className="h-4 w-4" />
+                    Abrir Calculadora de Billetes
+                  </button>
+                </div>
                 {montoFisico > 0 && (
                   <p className={`text-center text-xs font-bold mt-1 ${(montoFisico - resumenTurnoActivo.totalEsperado) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     Diferencia: {(montoFisico - resumenTurnoActivo.totalEsperado) >= 0 ? '+' : ''}
@@ -550,68 +561,81 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
           </div>
         </div>
       )}
-    </div>
 
-    {/* ===== VISOR PDF: ARQUEO ===== */}
-    {turnoParaArqueo && (
-      <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col p-4">
-        <div className="flex justify-between items-center bg-white rounded-t-2xl p-4">
-          <div className="flex items-center gap-3">
-            <Printer className="h-5 w-5 text-teal-600" />
-            <h3 className="font-bold text-slate-800">
-              {turnoParaArqueo.turno.tipoCierre === 'FINAL' ? 'Arqueo Z — Cierre Final' : 'Arqueo X — Cierre Parcial'}
-            </h3>
-            {/* Selector de formato */}
-            <div className="flex bg-slate-100 rounded-lg p-1 ml-2 border border-slate-200">
-              <button
-                onClick={() => setTurnoParaArqueo(p => p ? { ...p, formato: 'a4' } : null)}
-                className={`px-3 py-1 text-[11px] font-bold rounded-md transition-colors ${turnoParaArqueo.formato === 'a4' ? 'bg-white shadow text-teal-700' : 'text-slate-500'}`}
-              >A4</button>
-              <button
-                onClick={() => setTurnoParaArqueo(p => p ? { ...p, formato: 'ticket' } : null)}
-                className={`px-3 py-1 text-[11px] font-bold rounded-md transition-colors ${turnoParaArqueo.formato === 'ticket' ? 'bg-white shadow text-teal-700' : 'text-slate-500'}`}
-              >Ticket 80mm</button>
+      {/* ===== VISOR PDF: ARQUEO ===== */}
+      {turnoParaArqueo && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col p-4">
+          <div className="flex justify-between items-center bg-white rounded-t-2xl p-4">
+            <div className="flex items-center gap-3">
+              <Printer className="h-5 w-5 text-teal-600" />
+              <h3 className="font-bold text-slate-800">
+                {turnoParaArqueo.turno.tipoCierre === 'FINAL' ? 'Arqueo Z — Cierre Final' : 'Arqueo X — Cierre Parcial'}
+              </h3>
+              {/* Selector de formato */}
+              <div className="flex bg-slate-100 rounded-lg p-1 ml-2 border border-slate-200">
+                <button
+                  onClick={() => setTurnoParaArqueo(p => p ? { ...p, formato: 'a4' } : null)}
+                  className={`px-3 py-1 text-[11px] font-bold rounded-md transition-colors ${turnoParaArqueo.formato === 'a4' ? 'bg-white shadow text-teal-700' : 'text-slate-500'}`}
+                >A4</button>
+                <button
+                  onClick={() => setTurnoParaArqueo(p => p ? { ...p, formato: 'ticket' } : null)}
+                  className={`px-3 py-1 text-[11px] font-bold rounded-md transition-colors ${turnoParaArqueo.formato === 'ticket' ? 'bg-white shadow text-teal-700' : 'text-slate-500'}`}
+                >Ticket 80mm</button>
+              </div>
             </div>
+            <button
+              onClick={() => setTurnoParaArqueo(null)}
+              className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
           </div>
-          <button
-            onClick={() => setTurnoParaArqueo(null)}
-            className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
-          >
-            <X className="h-6 w-6" />
-          </button>
+          <div className="flex-1 bg-slate-100 rounded-b-2xl overflow-hidden border-x border-b border-white">
+            <PDFViewer width="100%" height="100%" className="border-none">
+              <ArqueoPdf
+                turno={turnoParaArqueo.turno}
+                resumen={turnoParaArqueo.resumen}
+                formato={turnoParaArqueo.formato}
+              />
+            </PDFViewer>
+          </div>
         </div>
-        <div className="flex-1 bg-slate-100 rounded-b-2xl overflow-hidden border-x border-b border-white">
-          <PDFViewer width="100%" height="100%" className="border-none">
-            <ArqueoPdf
-              turno={turnoParaArqueo.turno}
-              resumen={turnoParaArqueo.resumen}
-              formato={turnoParaArqueo.formato}
-            />
-          </PDFViewer>
-        </div>
-      </div>
-    )}
+      )}
+      
       {/* ===================================================================
           VISOR DE PDF (REPORTE GENERAL DE CAJAS)
           =================================================================== */}
-      {mostrarPdfGeneralCajas && (
+      {formatoPdfGeneral && (
         <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex flex-col p-4 animate-in fade-in">
           <div className="bg-slate-800 text-white p-3 rounded-t-2xl flex justify-between items-center max-w-5xl w-full mx-auto shadow-2xl border-x border-t border-slate-700">
             <div className="flex items-center gap-3 pl-2">
               <div className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg border border-indigo-500/30">
                 <Printer className="h-5 w-5" />
               </div>
-              <div>
-                <h3 className="font-bold text-sm">Reporte General de Cajas</h3>
-                <p className="text-[10px] text-slate-400">
-                  Formato A4
-                </p>
+              <div className="flex items-center gap-4">
+                <div>
+                  <h3 className="font-bold text-sm">Reporte General de Cajas</h3>
+                  <p className="text-[10px] text-slate-400">
+                    Balance Consolidado
+                  </p>
+                </div>
+                {/* Selector de formato */}
+                <div className="flex bg-slate-700/50 rounded-lg p-1 ml-4 border border-slate-600">
+                  <button
+                    onClick={() => setFormatoPdfGeneral('a4')}
+                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-colors ${formatoPdfGeneral === 'a4' ? 'bg-indigo-600 text-white shadow' : 'text-slate-300 hover:text-white'}`}
+                  >A4</button>
+                  <button
+                    onClick={() => setFormatoPdfGeneral('ticket')}
+                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-colors ${formatoPdfGeneral === 'ticket' ? 'bg-indigo-600 text-white shadow' : 'text-slate-300 hover:text-white'}`}
+                  >Ticket 80mm</button>
+                </div>
               </div>
             </div>
             
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setMostrarPdfGeneralCajas(false)}
+                onClick={() => setFormatoPdfGeneral(null)}
                 className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors"
                 title="Cerrar visor"
               >
@@ -627,9 +651,24 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
                 kpisCajas={kpisCajas}
                 filtroFechaStr={filtroFecha === 'RANGO_PERSONALIZADO' ? `${fechaDesde || 'Inicio'} al ${fechaHasta || 'Fin'}` : filtroFecha}
                 filtroTipoCierreStr={filtroTipoCierre}
+                formato={formatoPdfGeneral}
               />
             </PDFViewer>
           </div>
+        </div>
+      )}
+
+      {/* ===== MODAL CALCULADORA DE BILLETES ===== */}
+      {mostrarCalculadora && (
+        <div className="fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <CalculadoraBilletes 
+            onTotalCalculado={(total, desglose) => {
+              setMontoFisico(total);
+              setDesgloseBilletes(desglose);
+              setMostrarCalculadora(false);
+            }} 
+            onClose={() => setMostrarCalculadora(false)} 
+          />
         </div>
       )}
     </div>

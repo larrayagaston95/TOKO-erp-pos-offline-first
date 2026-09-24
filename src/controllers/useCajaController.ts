@@ -103,7 +103,8 @@ export const useCajaController = () => {
   const cerrarCaja = async (
     montoFisicoContado: number,
     notas: string,
-    esCierreFinal: boolean
+    esCierreFinal: boolean,
+    detalle_billetes?: any
   ): Promise<boolean> => {
     try {
       if (!turnoActivo) {
@@ -122,6 +123,7 @@ export const useCajaController = () => {
         notas,
         estado: 'CERRADA',
         tipoCierre: esCierreFinal ? 'FINAL' : 'PARCIAL',
+        detalle_billetes,
       });
       return true;
     } catch (error) {
@@ -175,14 +177,22 @@ export const useCajaController = () => {
     let totalEsperado = 0;
     let totalFisico = 0;
     let diferenciaTotal = 0;
+    let totalVentas = 0;
+    let totalInicial = 0;
 
     turnosCerradosFiltrados.forEach(turno => {
-      totalEsperado += turno.montoFinalEsperado || 0;
-      totalFisico += turno.montoFinalReal || 0;
-      diferenciaTotal += (turno.montoFinalReal || 0) - (turno.montoFinalEsperado || 0);
+      const esperado = turno.montoFinalEsperado || 0;
+      const fisico = turno.montoFinalReal || 0;
+      const inicial = turno.montoInicial || 0;
+
+      totalEsperado += esperado;
+      totalFisico += fisico;
+      diferenciaTotal += fisico - esperado;
+      totalInicial += inicial;
+      totalVentas += esperado - inicial;
     });
 
-    return { totalEsperado, totalFisico, diferenciaTotal };
+    return { totalEsperado, totalFisico, diferenciaTotal, totalVentas, totalInicial };
   }, [turnosCerradosFiltrados]);
 
   return {
