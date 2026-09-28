@@ -1,3 +1,4 @@
+// Archivo: src/App.tsx
 /**
  * ============================================================================
  * VISTA PRINCIPAL: APP SHELL & ORQUESTADOR MVC (App.tsx)
@@ -23,7 +24,8 @@ import { ReportesView } from './views/reportes/ReportesView';
 import { CajaView } from './views/caja/CajaView';
 import { ConfiguracionView } from './views/configuracion/ConfiguracionView';
 import { EmpleadosView } from './views/empleados/EmpleadosView';
-import { LoginView } from './views/auth/LoginView';
+import { SetupTerminalView } from './views/auth/SetupTerminalView';
+import { LoginPOSView } from './views/auth/LoginPOSView';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Empleado } from './models';
 
@@ -34,11 +36,18 @@ import { usePreventaController } from './controllers/usePreventaController';
 
 export default function App() {
   /**
-   * Usuario que ha iniciado sesión en el sistema.
-   * null → muestra LoginView (acceso bloqueado al sistema).
-   * Empleado → muestra el sistema ERP completo (Sidebar + Topbar + Vistas).
+   * Fase 1: Estado de enrolamiento de la terminal.
+   * Inicializado leyendo el localStorage para saber si la empresa fue vinculada.
    */
-  const [usuarioAutenticado, setUsuarioAutenticado] = useState<Empleado | null>(null);
+  const [terminalEnrolada, setTerminalEnrolada] = useState<boolean>(() => {
+    return !!localStorage.getItem('toko_empresa_id');
+  });
+
+  /**
+   * Fase 2: Usuario operador que ha iniciado sesión en el sistema.
+   * Inicializado en null.
+   */
+  const [empleadoLogueado, setEmpleadoLogueado] = useState<Empleado | null>(null);
 
   // Módulo actualmente activo en el menú lateral
   const [moduloActivo, setModuloActivo] = useState<ModuloActivo>('pos');
@@ -49,17 +58,11 @@ export default function App() {
    */
   const [sidebarColapsado, setSidebarColapsado] = useState<boolean>(false);
 
-  /** Callback que recibe LoginView al validar las credenciales correctamente. */
-  const manejarLoginExitoso = (empleado: Empleado) => {
-    setUsuarioAutenticado(empleado);
-  };
-
   /**
    * Limpia la sesión del usuario y redirige al Login.
-   * El guard de autenticación detecta el null y renderiza LoginView automáticamente.
    */
   const manejarCerrarSesion = () => {
-    setUsuarioAutenticado(null);
+    setEmpleadoLogueado(null);
     setModuloActivo('pos'); // Resetea el módulo para el próximo inicio de sesión
   };
 
@@ -106,13 +109,27 @@ export default function App() {
     }
   };
 
-  // ── Guard de autenticación ──────────────────────────────────────────────
-  // Si el operador no está autenticado, renderizar EXCLUSIVAMENTE el login.
-  // Ningún controlador ni vista del ERP se monta hasta que la sesión sea válida.
-  if (!usuarioAutenticado) {
-    return <LoginView alIniciarSesion={manejarLoginExitoso} />;
+  // ── GUARDIA DE RUTAS Y VISTAS (RENDERIZADO CONDICIONAL) ─────────────
+
+  // Fase 1 (Setup): La terminal aún no ha sido enrolada a una empresa
+  if (!terminalEnrolada) {
+    return (
+      <SetupTerminalView 
+        onSetupCompleto={() => setTerminalEnrolada(true)} 
+      />
+    );
   }
 
+  // Fase 2 (Login): La terminal está enrolada pero no hay cajero logueado
+  if (!empleadoLogueado) {
+    return (
+      <LoginPOSView 
+        onLoginExitoso={(empleado) => setEmpleadoLogueado(empleado)} 
+      />
+    );
+  }
+
+  // Fase 3 (Sistema Liberado): Operador logueado exitosamente
   return (
     <div className="relative flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-800 font-sans antialiased selection:bg-teal-500 selection:text-white">
       {/* 1. Menú Lateral (Sidebar) */}
@@ -120,7 +137,7 @@ export default function App() {
         <Sidebar 
           moduloActivo={moduloActivo} 
           alSeleccionarModulo={setModuloActivo} 
-          usuarioActual={usuarioAutenticado}
+          usuarioActual={empleadoLogueado}
           alCerrarSesion={manejarCerrarSesion}
         />
       )}
@@ -153,12 +170,12 @@ export default function App() {
             <PosView 
               controlador={posController} 
               estaOnline={redController.estaOnline}
-              usuarioAutenticado={usuarioAutenticado}
+              usuarioAutenticado={empleadoLogueado}
             />
           )}
 
           {moduloActivo === 'ventas' && (
-            <VentasView usuarioAutenticado={usuarioAutenticado} />
+            <VentasView usuarioAutenticado={empleadoLogueado} />
           )}
 
           {moduloActivo === 'preventa' && (
@@ -181,7 +198,7 @@ export default function App() {
           )}
 
           {moduloActivo === 'caja' && (
-            <CajaView usuarioAutenticado={usuarioAutenticado} />
+            <CajaView usuarioAutenticado={empleadoLogueado} />
           )}
 
           {moduloActivo === 'configuracion' && (

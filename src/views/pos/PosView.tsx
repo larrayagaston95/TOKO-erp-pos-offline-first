@@ -52,7 +52,11 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
   const [mostrarVisorPdf, setMostrarVisorPdf] = useState(false);
   const [modoMediaHoja, setModoMediaHoja] = useState(true);
 
-  // ─── Control de Caja: Apertura y Bloqueo ───────────────────────────────
+  // --- COBRO INLINE (reemplaza ModalCobro) ---
+  const [montoAbonado, setMontoAbonado] = useState<number | ''>(0);
+  const [errorCobro, setErrorCobro] = useState('');
+
+  // â”€â”€â”€ Control de Caja: Apertura y Bloqueo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const cajaController = useCajaController();
   const [nombreCajero, setNombreCajero] = useState('');
   const [montoApertura, setMontoApertura] = useState<number>(0);
@@ -85,7 +89,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
     }
   };
 
-  // ─── Estados para Búsqueda Manual (Autocomplete) ───
+  // â”€â”€â”€ Estados para Búsqueda Manual (Autocomplete) â”€â”€â”€
   const [busquedaManual, setBusquedaManual] = useState('');
   const [resultadosBusqueda, setResultadosBusqueda] = useState<any[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -127,7 +131,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
       className="flex-1 flex flex-col lg:flex-row h-[calc(100vh-4rem)] overflow-hidden bg-slate-50/70 text-slate-800 select-none p-4 gap-4 relative"
     >
       {/* =====================================================================
-          OVERLAY: CAJA CERRADA — BLOQUEO TOTAL DEL POS
+          OVERLAY: CAJA CERRADA â€” BLOQUEO TOTAL DEL POS
           Cuando no hay turno activo, este overlay se superpone bloqueando
           el acceso a cualquier función del punto de venta.
           ===================================================================== */}
@@ -186,7 +190,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
                 className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 disabled:opacity-60 text-white py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-teal-600/25 transition-all active:scale-95 cursor-pointer"
               >
                 <DollarSign className="h-5 w-5" />
-                {abriendoCaja ? 'Abriendo Caja...' : '✅ Abrir Caja y Comenzar'}
+                {abriendoCaja ? 'Abriendo Caja...' : 'âœ… Abrir Caja y Comenzar'}
               </button>
             </form>
           </div>
@@ -194,12 +198,12 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
       )}
 
       {/* =====================================================================
-          COLUMNA IZQUIERDA: BUSCADOR TERMINAL, PISTOLA LÁSER Y TABLA DE ITEMS
+          COLUMNA IZQUIERDA: BUSCADOR TERMINAL, PISTOLA LÃSER Y TABLA DE ITEMS
           ===================================================================== */}
       <div className="flex-1 flex flex-col gap-4 overflow-hidden min-w-0">
         
         {/* ===================================================================
-            1. SCANNER & ACCESOS RÁPIDOS DE SUPERMERCADO
+            1. SCANNER & ACCESOS RÃPIDOS DE SUPERMERCADO
             =================================================================== */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-lg shadow-teal-900/5 shrink-0 space-y-3">
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
@@ -263,7 +267,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
               type="text"
               value={busquedaManual}
               onChange={(e) => setBusquedaManual(e.target.value)}
-              placeholder="🔍 Buscar producto por nombre o descripción..."
+              placeholder="ðŸ” Buscar producto por nombre o descripción..."
               className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200/90 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 outline-hidden transition-all shadow-2xs"
             />
             
@@ -316,7 +320,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
             <div className="flex items-center gap-2.5">
               <span className="h-2.5 w-2.5 rounded-full bg-teal-500" />
               <span className="font-bold text-slate-900 tracking-tight text-sm">TICKET DE VENTA EN CURSO</span>
-              <span className="text-slate-300">•</span>
+              <span className="text-slate-300">â€¢</span>
               <span className="text-teal-700 font-bold text-xs bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-100">
                 {controlador.itemsCarrito.length} renglones
               </span>
@@ -342,7 +346,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
                   <Barcode className="h-8 w-8 text-teal-600" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-bold text-slate-800">Ticket Vacío • Listo para Escanear</p>
+                  <p className="text-sm font-bold text-slate-800">Ticket Vacío â€¢ Listo para Escanear</p>
                   <p className="text-xs text-slate-500 mt-1 max-w-sm">Dispare con la pistola láser sobre el código de barras o use los botones de artículos frecuentes arriba.</p>
                 </div>
               </div>
@@ -378,9 +382,9 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 font-mono">
                           <span className="text-teal-700 font-semibold">{item.producto.codigoBarra}</span>
-                          <span>•</span>
+                          <span>â€¢</span>
                           <span className="text-slate-600 font-sans">{item.producto.categoria}</span>
-                          <span>•</span>
+                          <span>â€¢</span>
                           <span className={`font-medium ${
                             item.producto.stockActual <= 10 ? 'text-amber-600 font-bold' : 'text-slate-500'
                           }`}>
@@ -493,14 +497,14 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
           >
             {controlador.clientes.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.nombre} ({c.tipo}) {c.saldoCuentaCorriente < 0 ? `• Deuda: $${Math.abs(c.saldoCuentaCorriente)}` : ''}
+                {c.nombre} ({c.tipo}) {c.saldoCuentaCorriente < 0 ? `â€¢ Deuda: $${Math.abs(c.saldoCuentaCorriente)}` : ''}
               </option>
             ))}
           </select>
         </div>
 
         {/* ===================================================================
-            MEDIOS DE PAGO (BOTONES TÁCTILES RÁPIDOS)
+            MEDIOS DE PAGO (BOTONES TÃCTILES RÃPIDOS)
             =================================================================== */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-lg shadow-teal-900/5 space-y-3 shrink-0">
           <span className="text-slate-700 font-sans text-xs font-bold uppercase tracking-wider block">
@@ -512,9 +516,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
               { id: 'EFECTIVO' as MetodoPago, label: 'Efectivo', icon: Banknote },
               { id: 'DEBITO' as MetodoPago, label: 'Débito', icon: CreditCard },
               { id: 'CREDITO' as MetodoPago, label: 'Crédito', icon: CreditCard },
-              { id: 'TRANSFERENCIA_QR' as MetodoPago, label: 'QR / Transf.', icon: QrCode },
-              { id: 'CUENTA_CORRIENTE' as MetodoPago, label: 'Cta. Corriente', icon: FileText }
-            ].map((pago) => {
+              { id: 'TRANSFERENCIA_QR' as MetodoPago, label: 'QR / Transf.', icon: QrCode }].map((pago) => {
               const Icono = pago.icon;
               const esSeleccionado = controlador.metodoPago === pago.id;
               return (
@@ -523,7 +525,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
                   type="button"
                   onClick={() => controlador.setMetodoPago(pago.id)}
                   className={`p-3 rounded-xl border flex items-center gap-2.5 transition-all cursor-pointer hover:-translate-y-0.5 active:scale-95 ${
-                    pago.id === 'CUENTA_CORRIENTE' ? 'col-span-2' : ''
+                    ''
                   } ${
                     esSeleccionado
                       ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white border-transparent shadow-md shadow-teal-600/25 font-black'
@@ -537,46 +539,27 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
             })}
           </div>
 
-          {/* CALCULADORA DE VUELTO RÁPIDO PARA EFECTIVO */}
-          {controlador.metodoPago === 'EFECTIVO' && (
-            <div className="mt-3 pt-3 border-t border-slate-100 space-y-3">
-              <div className="flex items-center justify-between text-xs font-sans">
-                <span className="text-slate-600 font-bold">Paga con:</span>
-                <div className="relative w-40">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold font-mono">$</span>
-                  <input
-                    type="number"
-                    value={controlador.montoRecibido}
-                    onChange={(e) => controlador.setMontoRecibido(e.target.value ? Number(e.target.value) : '')}
-                    placeholder="Monto..."
-                    className="w-full pl-7 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-right font-mono font-bold text-slate-900 text-xs outline-hidden focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 shadow-2xs"
-                  />
-                </div>
-              </div>
-
-              {/* Botones de billetes rápidos */}
-              <div className="grid grid-cols-4 gap-2 text-xs font-mono">
-                {[1000, 2000, 5000, 10000].map((billete) => (
-                  <button
-                    key={billete}
-                    type="button"
-                    onClick={() => controlador.setMontoRecibido(billete)}
-                    className="py-2 bg-slate-50 hover:bg-teal-50 hover:border-teal-300 hover:text-teal-900 text-slate-700 rounded-xl border border-slate-200/90 font-bold transition-all cursor-pointer text-center shadow-2xs hover:-translate-y-0.5"
-                  >
-                    ${billete >= 1000 ? `${billete / 1000}k` : billete}
-                  </button>
-                ))}
-              </div>
-
-              {/* Vuelto a devolver */}
-              <div className="flex items-center justify-between p-3 bg-emerald-50/80 rounded-xl border border-emerald-200 font-sans shadow-2xs">
-                <span className="text-xs text-emerald-900 font-bold">Vuelto a entregar:</span>
-                <span className={`text-base font-black font-mono ${
-                  (controlador.calculosFinancieros?.vuelto ?? 0) >= 0 ? 'text-emerald-700' : 'text-rose-600'
-                }`}>
-                  ${Math.max(0, controlador.calculosFinancieros?.vuelto ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
+          {/* INGRESO DE MONTO DESTACADO */}
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <label className="text-slate-700 font-sans text-xs font-bold uppercase tracking-wider block mb-2">
+              Monto que entrega el cliente ($):
+            </label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold font-mono text-xl">$</span>
+              <input
+                type="number"
+                value={montoAbonado}
+                onChange={(e) => setMontoAbonado(e.target.value ? Number(e.target.value) : '')}
+                placeholder="0.00"
+                className="w-full pl-10 pr-4 py-3 bg-slate-100 border border-slate-300 rounded-xl text-right font-mono font-black text-slate-900 text-2xl outline-hidden focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 shadow-inner transition-all"
+              />
+            </div>
+          </div>
+          
+          {/* Mostrar error si lo hay */}
+          {errorCobro && (
+            <div className="mt-2 text-rose-600 text-xs font-bold text-center bg-rose-50 p-2 rounded-lg border border-rose-200">
+              {errorCobro}
             </div>
           )}
         </div>
@@ -588,7 +571,24 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
           type="button"
           id="btn-cobrar-ticket"
           disabled={controlador.itemsCarrito.length === 0}
-          onClick={() => controlador.cobrarYEmitirTicket()}
+          onClick={() => {
+            const totalFactura = controlador.calculosFinancieros?.total ?? 0;
+            const abonado = montoAbonado === '' ? 0 : Number(montoAbonado);
+            const cliente = controlador.clienteSeleccionado;
+            const esConsumidorFinal = !cliente || cliente.tipo === 'CONSUMIDOR_FINAL';
+
+            // REGLA 1: Consumidor Final no puede deber plata
+            if (esConsumidorFinal && abonado < totalFactura) {
+              setErrorCobro('Debe abonar el monto de la factura para poder emitir la factura.');
+              return;
+            }
+
+            // REGLA 2: Cliente registrado asume deuda automáticamente si paga menos
+            // La función procesarVenta ya envía los items, fecha y calcula el saldo negativo en CC.
+            controlador.procesarVenta(cliente?.id ?? 'CONSUMIDOR_FINAL', abonado, totalFactura);
+            setMontoAbonado('');
+            setErrorCobro('');
+          }}
           className="w-full min-h-[56px] bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-600 hover:from-teal-500 hover:to-emerald-500 disabled:opacity-30 disabled:pointer-events-none text-white font-sans font-black text-base rounded-2xl flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg shadow-teal-600/25 hover:-translate-y-0.5 active:scale-98 tracking-wide shrink-0"
         >
           <Receipt className="h-5 w-5" />
@@ -626,7 +626,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 font-mono text-xs space-y-2 text-slate-700 shadow-inner">
               <div className="text-center pb-2.5 border-b border-dashed border-slate-300 space-y-1">
                 <p className="font-black text-slate-900 text-sm">TOKO SUPERMERCADOS</p>
-                <p className="text-[11px] text-slate-500">CUIT: 30-71234567-8 • IVA RESP. INSCRIPTO</p>
+                <p className="text-[11px] text-slate-500">CUIT: 30-71234567-8 â€¢ IVA RESP. INSCRIPTO</p>
                 <p className="text-[11px] text-slate-600 font-bold">COMPROBANTE: {controlador.ticketEmitido.numeroTicket}</p>
                 <p className="text-[10px] text-slate-400">{new Date(controlador.ticketEmitido.fechaHora).toLocaleString('es-AR')}</p>
               </div>
@@ -745,6 +745,17 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
           </div>
         </div>
       )}
+
+      {/* ModalCobro eliminado: cobro ahora es inline en el panel derecho */}
     </div>
   );
 };
+
+
+
+
+
+
+
+
+

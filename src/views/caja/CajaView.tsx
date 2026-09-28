@@ -195,40 +195,43 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
                 </div>
               </div>
 
-              {/* Desglose de Caja en Tiempo Real */}
-              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-lg shadow-teal-900/5 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                  <h3 className="font-black text-slate-800">📊 Estado de Caja en Tiempo Real</h3>
-                </div>
-                <div className="p-6 space-y-3">
-                  <div className="flex items-center justify-between py-3 border-b border-slate-100">
-                    <span className="text-sm font-bold text-slate-700">Monto Inicial (Cambio)</span>
-                    <span className="font-mono font-black text-slate-900">{formatearPeso(turnoActivo.montoInicial)}</span>
+              {/* Panel de Estado de Caja en Tiempo Real */}
+              <div className="mt-6 border border-gray-100 rounded-xl bg-slate-50 p-5 sm:p-6">
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-4">
+                  📊 Estado de Caja en Tiempo Real
+                </h3>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Métrica 1: Efectivo */}
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Ventas en Efectivo</span>
+                    <p className="text-xl font-bold text-gray-700 mt-1">
+                      ${(resumenTurnoActivo?.ventasEfectivo || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between py-3 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1 rounded bg-emerald-100"><ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600" /></div>
-                      <span className="text-sm font-bold text-slate-700">(+) Ventas en Efectivo</span>
-                    </div>
-                    <span className="font-mono font-black text-emerald-600">{formatearPeso(resumenTurnoActivo.ventasEfectivo)}</span>
+
+                  {/* Métrica 2: Electrónico */}
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Medios Electrónicos</span>
+                    <p className="text-xl font-bold text-gray-700 mt-1">
+                      ${((resumenTurnoActivo?.ventasDebito || 0) + (resumenTurnoActivo?.ventasCredito || 0) + (resumenTurnoActivo?.ventasQr || 0)).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between py-3 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1 rounded bg-blue-100"><ArrowDownLeft className="h-3.5 w-3.5 text-blue-600" /></div>
-                      <span className="text-sm font-bold text-slate-700">(+) Cobros Cuentas Corrientes</span>
-                    </div>
-                    <span className="font-mono font-black text-blue-600">{formatearPeso(resumenTurnoActivo.cobrosCC)}</span>
+
+                  {/* Métrica 3: Total del Turno */}
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Operaciones</span>
+                    <p className="text-xl font-bold text-gray-700 mt-1">
+                      ${(resumenTurnoActivo?.totalVentas || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    </p>
                   </div>
-                  <div className="flex items-center justify-between py-3 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1 rounded bg-rose-100"><ArrowUpRight className="h-3.5 w-3.5 text-rose-600" /></div>
-                      <span className="text-sm font-bold text-slate-700">(-) Retiros / Gastos</span>
-                    </div>
-                    <span className="font-mono font-black text-rose-600">-{formatearPeso(resumenTurnoActivo.retiros)}</span>
-                  </div>
-                  <div className="flex items-center justify-between py-4 bg-slate-50 rounded-xl px-4 mt-2">
-                    <span className="text-base font-black text-slate-900">= TOTAL ESPERADO EN CAJA</span>
-                    <span className="font-mono font-black text-2xl text-slate-900">{formatearPeso(resumenTurnoActivo.totalEsperado)}</span>
+
+                  {/* Métrica 4: Esperado (Destacado) */}
+                  <div className="bg-teal-50 p-4 rounded-xl shadow-sm border border-teal-200">
+                    <span className="text-xs font-bold text-teal-600 uppercase tracking-wider">Efectivo Esperado</span>
+                    <p className="text-2xl font-black text-teal-700 mt-1">
+                      ${(resumenTurnoActivo?.totalEsperado || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -268,8 +271,8 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
       )}
 
       {pestanaActiva === 'HISTORIAL' && usuarioAutenticado.rol === 'ADMIN' && (
-        <div className="flex flex-col flex-1 min-h-0 p-4">
-          <div className="flex flex-col flex-1 min-h-0 gap-4 overflow-hidden">
+        <div className="flex flex-col flex-1 p-4 overflow-y-auto space-y-4">
+          <div className="flex flex-col flex-1 gap-4">
             {/* CABECERA Y FILTROS (HISTORIAL) */}
             <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
               <div>
@@ -409,7 +412,9 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
             </div>
 
             {/* TABLA DE CIERRES INDIVIDUALES CON SCROLL */}
-            <div className="mt-2 flex-1 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-sm min-h-0">
+            <div 
+              className="flex-1 min-h-[400px] overflow-auto bg-white rounded-2xl border border-slate-200/80 shadow-lg shadow-indigo-900/5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400"
+            >
               <table className="w-full text-sm text-left">
                 <thead className="bg-gray-50 text-gray-500 uppercase font-semibold text-xs sticky top-0 shadow-sm z-10">
                   <tr>

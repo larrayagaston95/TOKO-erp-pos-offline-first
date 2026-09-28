@@ -26,28 +26,18 @@ export const useClientesController = () => {
     return ventas.filter(v => v.metodoPago === 'CUENTA_CORRIENTE' && v.cliente?.id);
   }, [ventas]);
 
-  // 2. CALCULAR SALDOS DINÁMICAMENTE
+  // 2. OBTENER SALDOS
   const clientesConSaldo = useMemo<ClienteConSaldo[]>(() => {
     return clientes.map(cliente => {
-      const deudaVentas = ventasFiadas
-        .filter(v => v.cliente.id === cliente.id)
-        .reduce((sum, v) => sum + v.total, 0);
-        
-      const totalPagado = pagos
-        .filter(p => p.clienteId === cliente.id)
-        .reduce((sum, p) => sum + p.monto, 0);
-
-      // Si el cliente en el mock/base de datos tiene saldo negativo, asumimos que es deuda histórica.
-      const deudaInicial = cliente.saldoCuentaCorriente < 0 ? Math.abs(cliente.saldoCuentaCorriente) : 0;
-      
-      const saldoActual = deudaInicial + deudaVentas - totalPagado;
+      // El POS guarda deuda como saldo negativo. Convertimos a valor absoluto para mostrar deuda > 0.
+      const deudaActual = cliente.saldoCuentaCorriente < 0 ? Math.abs(cliente.saldoCuentaCorriente) : 0;
 
       return {
         ...cliente,
-        saldoCalculado: saldoActual
+        saldoCalculado: deudaActual
       };
     });
-  }, [clientes, pagos, ventasFiadas]);
+  }, [clientes]);
 
   // 3. ABM DE CLIENTES
   const guardarCliente = async (cliente: Omit<Cliente, 'id'> | Cliente) => {
@@ -96,8 +86,11 @@ export const useClientesController = () => {
     setCargando(true);
     setError(null);
     try {
-      const nuevoPago: PagoCuentaCorriente = {
+      const empresaIdStr = localStorage.getItem('toko_empresa_id') || '1';
+
+      const nuevoPago: PagoCuentaCorriente & { empresa_id?: string | number } = {
         id: uuidv4(),
+        empresa_id: parseInt(empresaIdStr, 10) || empresaIdStr,
         clienteId,
         fechaHora: new Date().toISOString(),
         monto,
@@ -106,18 +99,25 @@ export const useClientesController = () => {
         estadoSync: 'PENDIENTE_SYNC'
       };
 
-      await db.transaction('rw', db.pagos_cc, db.movimientos_caja, async () => {
+      await db.transaction('rw', db.pagos_cc, db.movimientos_caja, db.clientes, async () => {
         // Registrar el pago
-        await db.pagos_cc.add(nuevoPago);
+        await db.pagos_cc.add(nuevoPago as any);
 
-        // Ingresar el movimiento en la caja registradora (para que el efectivo cuadre)
+        // Actualizar saldoCuentaCorriente del cliente (Sumar el pago al saldo negativo)
+        const cliDb = await db.clientes.get(clienteId);
+        if (cliDb) {
+          const saldoAnterior = cliDb.saldoCuentaCorriente || 0;
+          await db.clientes.update(clienteId, { saldoCuentaCorriente: saldoAnterior + monto });
+        }
+
+        // Ingresar el movimiento en la caja registradora
         const clienteNombre = clientes.find(c => c.id === clienteId)?.nombre || 'Desconocido';
         await db.movimientos_caja.add({
           id: uuidv4(),
           fechaHora: new Date().toISOString(),
           tipo: 'INGRESO',
           monto: monto,
-          concepto: `Pago Cuenta Corriente - ${clienteNombre}`,
+          concepto: `Pago Cta. Cte. - ${clienteNombre}`,
           usuario: 'Cajero'
         });
       });
@@ -132,15 +132,19 @@ export const useClientesController = () => {
     }
   };
 
-  const obtenerHistorialCliente = (clienteId: string) => {
-    const compras = ventasFiadas
-      .filter(v => v.cliente.id === clienteId)
+  const cargarHistorialCliente = (clienteId: string) => {
+    // Buscamos ventas del cliente. Pueden ser financiadas o totales.
+    // El POS ya guarda el objeto VentaRealizada.
+    const compras = ventas
+      .filter(v => v.cliente?.id === clienteId)
       .map(v => ({
         id: v.id,
         fechaHora: v.fechaHora,
         tipo: 'COMPRA' as const,
         descripcion: `Ticket #${v.numeroTicket}`,
-        monto: v.total
+        monto: v.metodoPago === 'CUENTA_CORRIENTE' || v.total > 0 ? v.total : 0, 
+        metodoPago: v.metodoPago,
+        items: v.items
       }));
 
     const pagosRealizados = pagos
@@ -150,7 +154,9 @@ export const useClientesController = () => {
         fechaHora: p.fechaHora,
         tipo: 'PAGO' as const,
         descripcion: `Pago en ${p.metodoPago}`,
-        monto: p.monto
+        monto: p.monto,
+        metodoPago: p.metodoPago,
+        items: []
       }));
 
     // Ordenar de más reciente a más antiguo
@@ -166,6 +172,6 @@ export const useClientesController = () => {
     guardarCliente,
     eliminarCliente,
     registrarPago,
-    obtenerHistorialCliente
+    cargarHistorialCliente
   };
 };

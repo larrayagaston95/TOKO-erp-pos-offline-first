@@ -17,6 +17,9 @@ export interface Empleado {
   usuario: string;          // Nombre de usuario para login (ej: "juanp")
   pinOContrasena: string;   // Contraseña o PIN de acceso
   rol: RolSeguridad;        // Nivel de acceso
+  empresa_id: string | number; // Aislamiento SaaS Multi-Tenant
+  sucursal_id?: string | number; // Local físico de operación
+  pin_acceso?: string;      // PIN de acceso rápido para POS
 }
 
 /**
@@ -28,13 +31,18 @@ export const EMPLEADOS_MOCK: Empleado[] = [
     nombre: 'Administrador',
     usuario: 'admin',
     pinOContrasena: 'admin',
-    rol: 'ADMIN'
+    rol: 'ADMIN',
+    empresa_id: 1,
+    pin_acceso: '0000'
   },
   {
     id: 'emp-vend-01',
     nombre: 'Cajero / Vendedor',
     usuario: 'vendedor',
     pinOContrasena: '1234',
-    rol: 'VENDEDOR'
+    rol: 'VENDEDOR',
+    empresa_id: 1,
+    sucursal_id: 1,
+    pin_acceso: '1234'
   }
 ];

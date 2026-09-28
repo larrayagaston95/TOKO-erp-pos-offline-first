@@ -1,100 +1,87 @@
+// Archivo: src/controllers/useEmpleadosController.ts
 import { useState, useCallback } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
-import { Empleado, RolSeguridad } from '../models';
-import { v4 as uuidv4 } from 'uuid';
+import { db } from '../db/database';
+import { Empleado } from '../models/empleado.model';
 
-/**
- * ============================================================================
- * CONTROLADOR: EMPLEADOS Y ROLES (useEmpleadosController.ts)
- * ============================================================================
- * Lógica para la gestión (CRUD) del personal del negocio.
- * Exclusivo para administradores.
- */
 export const useEmpleadosController = () => {
-  // Suscripción reactiva a la tabla de empleados
-  const empleados = useLiveQuery(() => db.empleados.toArray(), []) || [];
+  const [empleados, asignarEmpleados] = useState<Empleado[]>([]);
+  const [cargando, asignarCargando] = useState<boolean>(false);
 
-  // Estado para la búsqueda
-  const [busqueda, setBusqueda] = useState('');
+  // Helper local para extraer seguridad
+  const obtenerIdentificadorEmpresa = () => localStorage.getItem('toko_empresa_id') || '';
 
-  // Filrado de empleados en memoria
-  const empleadosFiltrados = empleados.filter(e => 
-    e.nombre.toLowerCase().includes(busqueda.toLowerCase()) || 
-    e.usuario.toLowerCase().includes(busqueda.toLowerCase())
-  );
-
-  /**
-   * Crea un nuevo empleado.
-   */
-  const crearEmpleado = useCallback(async (
-    nombre: string,
-    usuario: string,
-    pinOContrasena: string,
-    rol: RolSeguridad
-  ): Promise<boolean> => {
+  const cargarEmpleados = useCallback(async () => {
+    asignarCargando(true);
     try {
-      // Verificar unicidad de usuario
-      const existe = await db.empleados.where('usuario').equals(usuario).first();
-      if (existe) {
-        console.warn('El nombre de usuario ya está en uso.');
-        return false;
+      const idEmpresaActual = obtenerIdentificadorEmpresa();
+      if (!idEmpresaActual) {
+        throw new Error('No hay empresa vinculada en esta terminal.');
       }
 
-      const nuevoEmpleado: Empleado = {
-        id: uuidv4(),
-        nombre,
-        usuario,
-        pinOContrasena,
-        rol
+      // Filtro Multi-tenant estricto
+      const listaEmpleados = await db.empleados
+        .filter((emp: Empleado) => String(emp.empresa_id) === String(idEmpresaActual))
+        .toArray();
+
+      asignarEmpleados(listaEmpleados);
+      console.log('[useEmpleadosController] Empleados cargados correctamente.');
+    } catch (error) {
+      console.error('[useEmpleadosController] Fallo al cargar empleados:', error);
+    } finally {
+      asignarCargando(false);
+    }
+  }, []);
+
+  const guardarEmpleado = async (empleadoData: any) => {
+    try {
+      // 1. Validar enrolamiento
+      const idEmpresaActual = obtenerIdentificadorEmpresa();
+      if (!idEmpresaActual) {
+        throw new Error('Operación denegada. La terminal no está enrolada a ninguna empresa.');
+      }
+
+      // 2. Generar clave primaria si es un empleado nuevo
+      const idFinal = empleadoData.id || 
+        (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
+
+      // 3 y 4. Inyección de dependencias estables (Multi-tenant y Seguridad)
+      const empleadoParaGuardar = {
+        ...empleadoData,
+        id: idFinal,
+        empresa_id: idEmpresaActual, // 3. Inyección estricta de empresa
+        pin_acceso: empleadoData.pin_acceso || empleadoData.pinOContrasena // 4. Inyección del PIN
       };
 
-      await db.empleados.add(nuevoEmpleado);
-      return true;
-    } catch (error) {
-      console.error('Error al crear empleado:', error);
-      return false;
-    }
-  }, []);
+      // 5. Escritura segura (Upsert)
+      await db.empleados.put(empleadoParaGuardar as Empleado);
+      console.log(`[useEmpleadosController] Empleado [${idFinal}] procesado y guardado en la base de datos local.`);
 
-  /**
-   * Edita un empleado existente.
-   */
-  const editarEmpleado = useCallback(async (
-    id: string,
-    datosParciales: Partial<Empleado>
-  ): Promise<boolean> => {
-    try {
-      await db.empleados.update(id, datosParciales);
+      // 6. Refrescar estado
+      await cargarEmpleados();
       return true;
     } catch (error) {
-      console.error('Error al editar empleado:', error);
+      console.error('[useEmpleadosController] Error crítico al guardar empleado en Dexie:', error);
       return false;
     }
-  }, []);
+  };
 
-  /**
-   * Elimina un empleado.
-   * IMPORTANTE: No se debería eliminar si tiene ventas asociadas,
-   * aunque a nivel lógico en este sistema offline el UUID de ventas
-   * persiste como string. Por precaución se permite borrar (baja lógica/física).
-   */
-  const eliminarEmpleado = useCallback(async (id: string): Promise<boolean> => {
+  const eliminarEmpleado = async (idEmpleado: number) => {
     try {
-      await db.empleados.delete(id);
+      await db.empleados.delete(idEmpleado);
+      console.log(`[useEmpleadosController] Empleado ID ${idEmpleado} eliminado.`);
+      await cargarEmpleados();
       return true;
     } catch (error) {
-      console.error('Error al eliminar empleado:', error);
+      console.error('[useEmpleadosController] Fallo crítico al eliminar:', error);
       return false;
     }
-  }, []);
+  };
 
   return {
-    empleados: empleadosFiltrados,
-    busqueda,
-    setBusqueda,
-    crearEmpleado,
-    editarEmpleado,
+    empleados,
+    cargando,
+    cargarEmpleados,
+    guardarEmpleado,
     eliminarEmpleado
   };
 };

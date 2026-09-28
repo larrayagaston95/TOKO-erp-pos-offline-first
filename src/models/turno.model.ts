@@ -32,4 +32,5 @@ export interface TurnoCaja {
   tipoCierre: TipoCierre;              // null = activo, 'PARCIAL' = cambio de turno, 'FINAL' = cierre del día
   sincronizado?: boolean;              // Estado de sincronización con el backend (true = sincronizado)
   detalle_billetes?: any;              // Desglose de billetes al momento del cierre
+  cantidad_ventas?: number;            // Cantidad de tickets/operaciones de venta en el turno
 }

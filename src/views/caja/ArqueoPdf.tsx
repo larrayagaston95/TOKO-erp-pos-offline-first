@@ -281,7 +281,7 @@ const ArqueoA4: React.FC<ArqueoPdfProps> = ({ turno, resumen }) => {
         </View>
         <View style={estilosA4.fila}>
           <Text style={estilosA4.etiqueta}>Tickets emitidos</Text>
-          <Text style={estilosA4.valor}>{resumen.cantidadTickets}</Text>
+          <Text style={estilosA4.valor}>{turno.cantidad_ventas || (turno as any).cantidad_tickets || 0}</Text>
         </View>
       </View>
 
@@ -308,6 +308,34 @@ const ArqueoA4: React.FC<ArqueoPdfProps> = ({ turno, resumen }) => {
           </View>
         )}
       </View>
+
+      {/* Desglose de Efectivo */}
+      {turno.detalle_billetes && (
+        <View style={estilosA4.seccion}>
+          <Text style={estilosA4.seccionTitulo}>Desglose de Efectivo</Text>
+          {[
+            { clave: 'billetesDiezMil', valor: 10000 },
+            { clave: 'billetesDosMil', valor: 2000 },
+            { clave: 'billetesMil', valor: 1000 },
+            { clave: 'billetesQuinientos', valor: 500 },
+            { clave: 'billetesDoscientos', valor: 200 },
+            { clave: 'billetesCien', valor: 100 },
+            { clave: 'monedasYOtros', valor: 1 }
+          ]
+            .filter(d => (turno.detalle_billetes?.[d.clave] || 0) > 0)
+            .map((fila, i) => {
+              const cantidad = turno.detalle_billetes?.[fila.clave] || 0;
+              const subtotal = cantidad * fila.valor;
+              return (
+                <View key={fila.clave} style={[estilosA4.fila, i % 2 !== 0 ? estilosA4.filaImpar : {}]}>
+                  <Text style={estilosA4.etiqueta}>{`${cantidad} x $${fila.valor}`}</Text>
+                  <Text style={estilosA4.valor}>{formatearMoneda(subtotal)}</Text>
+                </View>
+              );
+            })
+          }
+        </View>
+      )}
 
       {/* Total recaudado */}
       <View style={estilosA4.filaTotal}>
@@ -382,11 +410,42 @@ const ArqueoTicket: React.FC<ArqueoPdfProps> = ({ turno, resumen }) => {
         </Text>
       </View>
 
+      {/* Desglose de Efectivo */}
+      {turno.detalle_billetes && (
+        <>
+          <View style={estilosTicket.separador} />
+          <Text style={{ ...estilosTicket.subtitulo, textAlign: 'left', fontFamily: 'Courier-Bold', color: '#000' }}>
+            DESGLOSE DE EFECTIVO
+          </Text>
+          {[
+            { clave: 'billetesDiezMil', valor: 10000 },
+            { clave: 'billetesDosMil', valor: 2000 },
+            { clave: 'billetesMil', valor: 1000 },
+            { clave: 'billetesQuinientos', valor: 500 },
+            { clave: 'billetesDoscientos', valor: 200 },
+            { clave: 'billetesCien', valor: 100 },
+            { clave: 'monedasYOtros', valor: 1 }
+          ]
+            .filter(d => (turno.detalle_billetes?.[d.clave] || 0) > 0)
+            .map((fila) => {
+              const cantidad = turno.detalle_billetes?.[fila.clave] || 0;
+              const subtotal = cantidad * fila.valor;
+              return (
+                <View key={fila.clave} style={estilosTicket.fila}>
+                  <Text style={estilosTicket.etiqueta}>{`${cantidad} x $${fila.valor}`}</Text>
+                  <Text style={estilosTicket.valor}>{formatearMoneda(subtotal)}</Text>
+                </View>
+              );
+            })
+          }
+        </>
+      )}
+
       <View style={estilosTicket.totalFila}>
         <Text style={estilosTicket.totalEtq}>TOTAL:</Text>
         <Text style={estilosTicket.totalVal}>{formatearMoneda(resumen.totalVentas)}</Text>
       </View>
-      <Text style={estilosTicket.pie}>Tickets: {resumen.cantidadTickets}</Text>
+      <Text style={estilosTicket.pie}>Tickets: {turno.cantidad_ventas || (turno as any).cantidad_tickets || 0}</Text>
       <Text style={estilosTicket.pie}>Cierre: {formatearFecha(turno.fechaCierre)}</Text>
       <Text style={estilosTicket.pie}>TOKO ERP v3.0 PRO</Text>
     </Page>

@@ -26,6 +26,12 @@ import {
 import { db } from '../../db';
 import { PRODUCTOS_MOCK, Producto, CategoriaProducto } from '../../models';
 import { useProductosController } from '../../controllers/useProductosController';
+import { useCategoriasController } from '../../controllers/useCategoriasController';
+import { ModalConfirmacion } from '../../components/ui/ModalConfirmacion';
+import { GestorCategoriasModal } from './GestorCategoriasModal';
+import { useProveedoresController } from '../../controllers/useProveedoresController';
+import { ProveedorModal } from './ProveedorModal';
+import { Proveedor } from '../../models/proveedor.model';
 
 // ─── Valores iniciales para el formulario ───────────────────────────────────
 const PRODUCTO_VACIO: Omit<Producto, 'id'> = {
@@ -85,14 +91,22 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
   const setError = setErrorCtrl;
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
 
+  const { categorias } = useCategoriasController();
+  const [modalConfirmacionAbierto, setModalConfirmacionAbierto] = useState(false);
+
   const actualizar = (campo: keyof typeof form, valor: string | number) =>
     setForm((prev) => ({ ...prev, [campo]: valor }));
 
-  const guardar = async (e?: React.FormEvent) => {
+  const iniciarGuardado = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     
     if (!form.nombre.trim()) { setError('El nombre del artículo es obligatorio.'); return; }
     if (!form.codigoBarras.trim()) { setError('El código de barras es obligatorio.'); return; }
+    
+    setModalConfirmacionAbierto(true);
+  };
+
+  const ejecutarGuardado = async () => {
     try {
       const payload: Producto = {
         id: esEdicion ? producto!.id : `prod-${Date.now()}`,
@@ -115,6 +129,8 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
       
     } catch (e) {
       // Error handled by controller
+    } finally {
+      setModalConfirmacionAbierto(false);
     }
   };
 
@@ -149,7 +165,7 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
         </div>
 
         {/* Cuerpo */}
-        <form onSubmit={guardar}>
+        <form onSubmit={iniciarGuardado}>
           <div className="px-6 py-5 space-y-4 max-h-[65vh] overflow-y-auto">
             {mensajeExito && (
               <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 font-bold animate-in fade-in">
@@ -192,8 +208,9 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
                 onChange={(e) => actualizar('categoria', e.target.value as CategoriaProducto)}
                 className={inputCls}
               >
-                {CATEGORIAS.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                <option value="" disabled>Seleccione un rubro...</option>
+                {categorias.map((c) => (
+                  <option key={c.id} value={c.nombre}>{c.nombre}</option>
                 ))}
               </select>
             </Campo>
@@ -308,6 +325,17 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
         </div>
         </form>
       </div>
+
+      <ModalConfirmacion
+        estaAbierto={modalConfirmacionAbierto}
+        titulo="Confirmar Artículo"
+        mensaje="¿Deseas guardar los cambios en este producto?"
+        textoConfirmar="Guardar"
+        textoCancelar="Cancelar"
+        tipoAccion="info"
+        alConfirmar={ejecutarGuardado}
+        alCancelar={() => setModalConfirmacionAbierto(false)}
+      />
     </div>
   );
 };
@@ -373,14 +401,23 @@ const ModalEliminar: React.FC<ModalEliminarProps> = ({ producto, onCerrar }) => 
 
 // ─── Vista Principal ─────────────────────────────────────────────────────────
 export const ProductosView: React.FC = () => {
-  const { productos, mensajeNotificacion } = useProductosController();
+  const { productos, mensajeNotificacion, eliminarProducto } = useProductosController();
   const [busqueda, setBusqueda] = useState<string>('');
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>('TODAS');
+  const [pestanaActiva, setPestanaActiva] = useState<'inventario' | 'clasificacion' | 'proveedores'>('inventario');
+
+  const { proveedores, eliminarProveedor } = useProveedoresController();
+  const [modalProveedorAbierto, setModalProveedorAbierto] = useState(false);
+  const [proveedorEditar, setProveedorEditar] = useState<Proveedor | null>(null);
+  const [modalEliminarProvAbierto, setModalEliminarProvAbierto] = useState(false);
+  const [proveedorEliminar, setProveedorEliminar] = useState<Proveedor | null>(null);
 
   // Estado de modales ABM
   const [modalAlta, setModalAlta] = useState(false);
   const [productoEditar, setProductoEditar] = useState<Producto | null>(null);
-  const [productoEliminar, setProductoEliminar] = useState<Producto | null>(null);
+  const [modalEliminarAbierto, setModalEliminarAbierto] = useState(false);
+  const [productoAEliminar, setProductoAEliminar] = useState<Producto | null>(null);
+  const [modalCategoriasAbierto, setModalCategoriasAbierto] = useState(false);
   const [modalMasivo, setModalMasivo] = useState(false);
   
   // Estados del modal de actualización masiva
@@ -450,6 +487,40 @@ export const ProductosView: React.FC = () => {
 
   return (
     <div id="vista-productos-modulo" className="flex-1 p-6 bg-slate-50/70 flex flex-col min-h-0 gap-5 overflow-hidden">
+      {/* ── Tabs de Navegación ── */}
+      <div className="flex items-center gap-6 border-b border-slate-200 px-2 shrink-0 overflow-x-auto">
+        <button
+          onClick={() => setPestanaActiva('inventario')}
+          className={`pb-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
+            pestanaActiva === 'inventario'
+              ? 'border-teal-600 text-teal-700'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          📦 Inventario Principal
+        </button>
+        <button
+          onClick={() => setPestanaActiva('clasificacion')}
+          className={`pb-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
+            pestanaActiva === 'clasificacion'
+              ? 'border-teal-600 text-teal-700'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          🏷️ Clasificación y Marcas
+        </button>
+        <button
+          onClick={() => setPestanaActiva('proveedores')}
+          className={`pb-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
+            pestanaActiva === 'proveedores'
+              ? 'border-teal-600 text-teal-700'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          🏢 Proveedores
+        </button>
+      </div>
+
       {/* ── Modales ABM ── */}
       {modalAlta && (
         <ModalProducto producto={null} onCerrar={() => setModalAlta(false)} />
@@ -457,9 +528,16 @@ export const ProductosView: React.FC = () => {
       {productoEditar && (
         <ModalProducto producto={productoEditar} onCerrar={() => setProductoEditar(null)} />
       )}
-      {productoEliminar && (
-        <ModalEliminar producto={productoEliminar} onCerrar={() => setProductoEliminar(null)} />
-      )}
+
+      <ProveedorModal 
+        estaAbierto={modalProveedorAbierto}
+        proveedorAEditar={proveedorEditar}
+        alCerrar={() => {
+          setModalProveedorAbierto(false);
+          setProveedorEditar(null);
+        }}
+      />
+
 
       {/* ── Modal Actualización Masiva ── */}
       {modalMasivo && (
@@ -555,8 +633,10 @@ export const ProductosView: React.FC = () => {
         </div>
       )}
 
-      {/* Cabecera del Módulo */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-lg shadow-teal-900/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+      {pestanaActiva === 'inventario' && (
+        <>
+          {/* Cabecera del Módulo */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-lg shadow-teal-900/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
           <div className="flex items-center gap-2.5 mb-1">
             <div className="p-2 rounded-xl bg-teal-50 text-teal-600 border border-teal-100">
@@ -599,6 +679,14 @@ export const ProductosView: React.FC = () => {
           >
             <TrendingUp className="h-4 w-4" />
             <span>Actualización Masiva</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setModalCategoriasAbierto(true)}
+            className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:-translate-y-0.5 active:scale-95"
+          >
+            <span className="text-sm">⚙️</span>
+            <span>Configurar Rubros</span>
           </button>
           <button
             type="button"
@@ -702,7 +790,7 @@ export const ProductosView: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setProductoEliminar(prod)}
+                        onClick={() => { setProductoAEliminar(prod); setModalEliminarAbierto(true); }}
                         title="Eliminar artículo"
                         className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 border border-transparent hover:border-rose-200 transition-all"
                       >
@@ -717,6 +805,155 @@ export const ProductosView: React.FC = () => {
         </table>
         </div>
       </div>
+      </>
+      )}
+
+      {pestanaActiva === 'clasificacion' && (
+        <div className="flex-1 bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm flex flex-col items-center justify-center text-center animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center mb-4 border border-teal-100 shadow-inner">
+            <span className="text-2xl">🏷️</span>
+          </div>
+          <h2 className="text-xl font-black text-slate-800 mb-2">Clasificación y Marcas</h2>
+          <p className="text-slate-500 text-sm max-w-md mb-6">
+            Gestioná los atributos de tus productos como Rubros, Categorías, Subcategorías y Marcas para un catálogo más organizado.
+          </p>
+          <button className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95">
+            Configurar Atributos
+          </button>
+          
+          <div className="mt-8 w-full max-w-2xl border border-slate-200/80 rounded-xl overflow-hidden text-left shadow-sm">
+             <table className="w-full text-sm">
+                <thead className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4">Atributo</th>
+                    <th className="py-3 px-4">Tipo</th>
+                    <th className="py-3 px-4 text-center">Artículos Asociados</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  <tr className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-3 px-4 font-bold text-slate-800">Bebidas sin alcohol</td>
+                    <td className="py-3 px-4"><span className="px-2 py-1 bg-slate-100 rounded-md text-[10px] font-medium border border-slate-200/60">Rubro</span></td>
+                    <td className="py-3 px-4 text-center font-mono font-bold text-teal-600">12</td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-3 px-4 font-bold text-slate-800">Coca-Cola</td>
+                    <td className="py-3 px-4"><span className="px-2 py-1 bg-slate-100 rounded-md text-[10px] font-medium border border-slate-200/60">Marca</span></td>
+                    <td className="py-3 px-4 text-center font-mono font-bold text-teal-600">8</td>
+                  </tr>
+                </tbody>
+             </table>
+          </div>
+        </div>
+      )}
+
+      {pestanaActiva === 'proveedores' && (
+        <div className="flex-1 flex flex-col min-h-0 gap-5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex items-center justify-between shrink-0">
+            <div>
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <span>🏢</span> Directorio de Proveedores
+              </h2>
+              <p className="text-xs text-slate-500">Administrá las empresas que te suministran mercadería.</p>
+            </div>
+            <button 
+              onClick={() => { setProveedorEditar(null); setModalProveedorAbierto(true); }}
+              className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-teal-600/20 active:scale-95"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Nuevo Proveedor</span>
+            </button>
+          </div>
+          <div className="flex-1 bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
+            {proveedores.length === 0 ? (
+              <div className="flex-1 overflow-y-auto p-8 text-center flex flex-col items-center justify-center">
+                 <span className="text-4xl mb-3 grayscale opacity-50">📇</span>
+                 <h3 className="text-slate-700 font-bold mb-1">Aún no hay proveedores</h3>
+                 <p className="text-slate-500 text-sm">Agregá tu primer proveedor para empezar a asociarle artículos.</p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto">
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead className="bg-slate-50 border-b border-slate-100 text-xs font-bold uppercase tracking-wider text-slate-500">
+                    <tr>
+                      <th className="py-3 px-4">Razón Social</th>
+                      <th className="py-3 px-4">CUIT</th>
+                      <th className="py-3 px-4">Viajante</th>
+                      <th className="py-3 px-4">Teléfono</th>
+                      <th className="py-3 px-4 text-center">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {proveedores.map(prov => (
+                      <tr key={prov.id} className="hover:bg-slate-50/50 transition-colors group">
+                        <td className="py-3 px-4 font-bold">{prov.razon_social}</td>
+                        <td className="py-3 px-4 font-mono text-slate-500">{prov.cuit}</td>
+                        <td className="py-3 px-4">{prov.viajante_contacto || '-'}</td>
+                        <td className="py-3 px-4">{prov.telefono || '-'}</td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => { setProveedorEditar(prov); setModalProveedorAbierto(true); }} className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg">
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button onClick={() => { setProveedorEliminar(prov); setModalEliminarProvAbierto(true); }} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <ModalConfirmacion
+        estaAbierto={modalEliminarProvAbierto}
+        titulo="Eliminar Proveedor"
+        mensaje={`¿Estás seguro de que deseas eliminar a "${proveedorEliminar?.razon_social}"?`}
+        textoConfirmar="Eliminar"
+        textoCancelar="Cancelar"
+        tipoAccion="peligro"
+        alConfirmar={async () => {
+          if (proveedorEliminar) {
+            await eliminarProveedor(proveedorEliminar.id);
+            setModalEliminarProvAbierto(false);
+            setProveedorEliminar(null);
+          }
+        }}
+        alCancelar={() => {
+          setModalEliminarProvAbierto(false);
+          setProveedorEliminar(null);
+        }}
+      />
+
+      <ModalConfirmacion
+        estaAbierto={modalEliminarAbierto}
+        titulo="Eliminar Artículo"
+        mensaje={`¿Estás seguro de que deseas eliminar "${productoAEliminar?.nombre}" del catálogo? Esta acción no se puede deshacer.`}
+        textoConfirmar="Eliminar Artículo"
+        textoCancelar="Cancelar"
+        tipoAccion="peligro"
+        alConfirmar={async () => {
+          if (productoAEliminar) {
+            await eliminarProducto(productoAEliminar.id);
+            setModalEliminarAbierto(false);
+            setProductoAEliminar(null);
+          }
+        }}
+        alCancelar={() => {
+          setModalEliminarAbierto(false);
+          setProductoAEliminar(null);
+        }}
+      />
+
+      <GestorCategoriasModal
+        estaAbierto={modalCategoriasAbierto}
+        alCerrar={() => setModalCategoriasAbierto(false)}
+      />
     </div>
   );
 };

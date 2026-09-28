@@ -14,6 +14,8 @@
 
 import Dexie, { Table } from 'dexie';
 import { Producto, PRODUCTOS_MOCK, Cliente, CLIENTES_MOCK, VentaRealizada, MovimientoCaja, PagoCuentaCorriente, TurnoCaja, Empleado, EMPLEADOS_MOCK } from '../models';
+import { Categoria, CATEGORIAS_MOCK } from '../models/categoria.model';
+import { Proveedor } from '../models/proveedor.model';
 
 /**
  * Estructura de cada elemento en la cola de sincronización Outbox
@@ -41,6 +43,8 @@ export class OmniPosDatabase extends Dexie {
   pagos_cc!: Table<PagoCuentaCorriente, string>;
   turnos_caja!: Table<TurnoCaja, string>;
   empleados!: Table<Empleado, string>;
+  categorias!: Table<Categoria, string>;
+  proveedores!: Table<Proveedor, string>;
 
   constructor() {
     super('OmniPosDB');
@@ -65,6 +69,20 @@ export class OmniPosDatabase extends Dexie {
       pagos_cc: 'id, clienteId, fechaHora, estadoSync',
       turnos_caja: 'id, estado, cajero, fechaApertura',
       empleados: 'id, usuario, rol'
+    });
+
+    // Versión 8: Agrega tabla de proveedores
+    this.version(8).stores({
+      productos: 'id, codigoBarras, categoria, nombre',
+      clientes: 'id, codigo, nombre, tipo, zonaRuta',
+      ventas: 'id, numeroTicket, fechaHora, tipoOperacion, estadoSync, turnoId',
+      sync_outbox: 'id, tipoOperacion, referenciaId, estado, fechaCreacion',
+      movimientos_caja: 'id, fechaHora, tipo, turnoId',
+      pagos_cc: 'id, clienteId, fechaHora, estadoSync',
+      turnos_caja: 'id, estado, cajero, fechaApertura',
+      empleados: 'id, usuario, rol',
+      categorias: 'id, empresa_id, nombre',
+      proveedores: 'id, empresa_id, razon_social'
     });
 
     // Seeder automático al crear la base de datos (cuando está vacía)
@@ -92,28 +110,32 @@ export async function poblarBaseDeDatosInicial(forzar: boolean = false): Promise
   productos: number;
   clientes: number;
   empleados: number;
+  categorias: number;
 }> {
   const conteoActual = await db.productos.count();
 
   if (conteoActual === 0 || forzar) {
-    await db.transaction('rw', db.productos, db.clientes, db.empleados, async () => {
+    await db.transaction('rw', db.productos, db.clientes, db.empleados, db.categorias, async () => {
       // Limpiamos si es forzado para evitar duplicados o estados inconsistentes
       if (forzar) {
         await db.productos.clear();
         await db.clientes.clear();
         await db.empleados.clear();
+        await db.categorias.clear();
       }
       await db.productos.bulkPut(PRODUCTOS_MOCK);
       await db.clientes.bulkPut(CLIENTES_MOCK);
       await db.empleados.bulkPut(EMPLEADOS_MOCK);
+      await db.categorias.bulkPut(CATEGORIAS_MOCK);
     });
   }
 
   const productos = await db.productos.count();
   const clientes = await db.clientes.count();
   const empleados = await db.empleados.count();
+  const categorias = await db.categorias.count();
 
-  return { productos, clientes, empleados };
+  return { productos, clientes, empleados, categorias };
 }
 
 /**
