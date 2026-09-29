@@ -556,6 +556,29 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
             </div>
           </div>
           
+          {/* Feedback dinámico de Vuelto / Saldo a CC */}
+          {montoAbonado !== '' && Number(montoAbonado) > 0 && (() => {
+            const totalFact = controlador.calculosFinancieros?.total ?? 0;
+            const abonado = Number(montoAbonado);
+            if (abonado > totalFact) {
+              return (
+                <div className="mt-2 flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
+                  <span className="text-xs font-bold text-emerald-700 uppercase tracking-wide">Vuelto a entregar:</span>
+                  <span className="font-mono font-black text-emerald-700 text-lg">${(abonado - totalFact).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              );
+            }
+            if (abonado < totalFact && controlador.clienteSeleccionado?.tipo !== 'CONSUMIDOR_FINAL') {
+              return (
+                <div className="mt-2 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5">
+                  <span className="text-xs font-bold text-blue-700 uppercase tracking-wide">A Cuenta Corriente:</span>
+                  <span className="font-mono font-black text-blue-700 text-lg">${(totalFact - abonado).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           {/* Mostrar error si lo hay */}
           {errorCobro && (
             <div className="mt-2 text-rose-600 text-xs font-bold text-center bg-rose-50 p-2 rounded-lg border border-rose-200">
@@ -640,16 +663,36 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
                 ))}
               </div>
 
-              <div className="pt-2.5 border-t border-dashed border-slate-300 flex justify-between text-sm font-black text-teal-800">
-                <span>TOTAL ARS:</span>
-                <span>${controlador.ticketEmitido.total.toLocaleString('es-AR')}</span>
-              </div>
-
-              <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-500 flex justify-between font-sans">
-                <span>PAGO: <strong>{controlador.ticketEmitido.metodoPago}</strong></span>
-                <span className="text-teal-700 font-bold">
-                  {controlador.ticketEmitido.estadoSync === 'PENDIENTE_SYNC' ? 'OFFLINE (EN COLA)' : 'SINCRONIZADO'}
-                </span>
+              <div className="pt-2.5 border-t border-dashed border-slate-300">
+                <div className="flex justify-between text-sm font-black text-teal-800 mb-2">
+                  <span>TOTAL ARS:</span>
+                  <span>${controlador.ticketEmitido.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="space-y-1 text-[11px] text-slate-600 font-sans border-t border-slate-200 pt-2">
+                  <div className="flex justify-between">
+                    <span>Medio de Pago:</span>
+                    <strong>{controlador.ticketEmitido.metodoPago.replace('_', ' ')}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Su Pago:</span>
+                    <strong className="text-slate-800">${(controlador.ticketEmitido.montoAbonado ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</strong>
+                  </div>
+                  {(controlador.ticketEmitido.vuelto ?? 0) > 0 && (
+                    <div className="flex justify-between text-emerald-700 font-bold">
+                      <span>Su Vuelto:</span>
+                      <strong>${controlador.ticketEmitido.vuelto.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</strong>
+                    </div>
+                  )}
+                  {(controlador.ticketEmitido.saldoAfectadoCC ?? 0) > 0 && (
+                    <div className="flex justify-between text-blue-700 font-bold">
+                      <span>A Cta. Corriente:</span>
+                      <strong>${controlador.ticketEmitido.saldoAfectadoCC.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</strong>
+                    </div>
+                  )}
+                  <div className="flex justify-between pt-1 border-t border-slate-100">
+                    <span className="text-teal-700 font-bold">{controlador.ticketEmitido.estadoSync === 'PENDIENTE_SYNC' ? 'OFFLINE (EN COLA)' : 'SINCRONIZADO'}</span>
+                  </div>
+                </div>
               </div>
             </div>
 

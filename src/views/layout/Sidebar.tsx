@@ -118,6 +118,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ moduloActivo, alSeleccionarMod
         subtitulo: 'Seguridad y Accesos',
         icono: UsersRound,
         rolesPermitidos: ['ADMIN']
+      },
+      {
+        id: 'configuracion',
+        etiqueta: 'Configuración',
+        subtitulo: 'Ajustes y Sistema',
+        icono: Settings,
+        rolesPermitidos: ['ADMIN']
       }
     ];
 

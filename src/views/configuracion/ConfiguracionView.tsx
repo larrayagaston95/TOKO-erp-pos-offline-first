@@ -24,7 +24,8 @@ import {
   Trash2,
   Layers,
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  Users
 } from 'lucide-react';
 import { db, poblarBaseDeDatosInicial, SyncOutboxItem } from '../../db';
 
@@ -42,6 +43,21 @@ export const ConfiguracionView: React.FC<ConfiguracionViewProps> = ({
   const [sincronizandoManual, setSincronizandoManual] = useState<boolean>(false);
   const [descargandoBootstrap, setDescargandoBootstrap] = useState<boolean>(false);
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
+
+  // Estados para Políticas de Cuenta Corriente
+  const [modoMora, setModoMora] = useState<'INTERES_DIARIO' | 'REPOSICION'>(
+    (localStorage.getItem('toko_modo_mora') as 'INTERES_DIARIO' | 'REPOSICION') || 'INTERES_DIARIO'
+  );
+  const [tasaMensual, setTasaMensual] = useState<number>(
+    Number(localStorage.getItem('toko_tasa_mensual')) || 10
+  );
+
+  const guardarAjustesCuentaCorriente = () => {
+    localStorage.setItem('toko_modo_mora', modoMora);
+    localStorage.setItem('toko_tasa_mensual', tasaMensual.toString());
+    setMensajeExito('✓ Políticas de Cuenta Corriente actualizadas correctamente.');
+    setTimeout(() => setMensajeExito(null), 3000);
+  };
 
   // Consultas en tiempo real a las tablas de Dexie
   const totalProductos = useLiveQuery(() => db.productos.count(), []) ?? 0;
@@ -254,6 +270,57 @@ export const ConfiguracionView: React.FC<ConfiguracionViewProps> = ({
               Imprimir Ticket de Prueba
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Tarjeta: Políticas de Cuenta Corriente */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-lg shadow-teal-900/5 space-y-4">
+        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+          <div className="p-1.5 rounded-lg bg-teal-50 text-teal-600">
+            <Users className="h-4 w-4" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-900">Políticas de Cuenta Corriente (Mora)</h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div>
+            <label className="text-slate-600 font-semibold block mb-1">Método de actualización por Mora:</label>
+            <select
+              value={modoMora}
+              onChange={(e) => setModoMora(e.target.value as 'INTERES_DIARIO' | 'REPOSICION')}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-800 outline-hidden focus:border-teal-500"
+            >
+              <option value="INTERES_DIARIO">Interés Financiero Diario (%)</option>
+              <option value="REPOSICION">Actualización a Precio de Góndola actual</option>
+            </select>
+            <p className="text-[10px] text-slate-400 mt-1">Aplica sobre el saldo fiado cuando la deuda supera los 30 días.</p>
+          </div>
+
+          <div>
+            <label className={`text-slate-600 font-semibold block mb-1 ${modoMora !== 'INTERES_DIARIO' ? 'opacity-50' : ''}`}>
+              Tasa de interés mensual (%):
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={tasaMensual}
+              onChange={(e) => setTasaMensual(Number(e.target.value))}
+              disabled={modoMora !== 'INTERES_DIARIO'}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-800 outline-hidden focus:border-teal-500 disabled:opacity-50"
+            />
+          </div>
+        </div>
+
+        <div className="pt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={guardarAjustesCuentaCorriente}
+            className="py-2.5 px-6 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-teal-600/20 hover:-translate-y-0.5 active:scale-95 flex items-center gap-2"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Guardar Cambios
+          </button>
         </div>
       </div>
 

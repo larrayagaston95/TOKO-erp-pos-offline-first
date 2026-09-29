@@ -267,6 +267,12 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
     const empresaIdStr = localStorage.getItem('toko_empresa_id') || '1';
     const numeroAleatorio = Math.floor(1000 + Math.random() * 9000);
 
+    // Cálculo de vuelto y saldo a CC
+    const vueltoCalculado = montoAbonado > totalVenta ? montoAbonado - totalVenta : 0;
+    const saldoCC = montoAbonado < totalVenta && clienteSelecc.tipo !== 'CONSUMIDOR_FINAL'
+      ? totalVenta - montoAbonado
+      : 0;
+
     // GeneraciÃ³n del comprobante de venta
     const nuevoTicket: VentaRealizada & { empresa_id?: string | number } = {
       id: `venta-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
@@ -281,6 +287,9 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
       descuentoPorcentaje,
       total: totalVenta,
       metodoPago,
+      montoAbonado,
+      vuelto: vueltoCalculado,
+      saldoAfectadoCC: saldoCC,
       tipoComprobante: 'TICKET_X',
       estadoSync: estaOnline ? 'SINCRONIZADO' : 'PENDIENTE_SYNC',
       vendedor: usuarioAutenticado?.nombre || 'Cajero Desconocido',

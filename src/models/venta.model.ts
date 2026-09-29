@@ -54,6 +54,9 @@ export interface VentaRealizada {
   descuentoPorcentaje: number;        // Porcentaje de descuento aplicado
   total: number;                      // Total final abonado o adeudado
   metodoPago: MetodoPago;             // Medio de pago seleccionado
+  montoAbonado: number;               // Monto que entregó el cliente en caja
+  vuelto: number;                     // Cambio devuelto al cliente (0 si no aplica)
+  saldoAfectadoCC: number;            // Monto transferido a Cuenta Corriente (0 si no aplica)
   estadoSync: EstadoSincronizacion;   // Estado de sincronización en cola local
   vendedor: string;                   // Nombre del cajero o preventista responsable
   empleadoId?: string;                // ID del empleado (para trazabilidad y reportes)

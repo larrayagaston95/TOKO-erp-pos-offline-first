@@ -1,10 +1,41 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
 import { Cliente, PagoCuentaCorriente, VentaRealizada } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 
 export type ClienteConSaldo = Cliente & { saldoCalculado: number };
+
+// ============================================================================
+// CONFIGURACIONES GLOBALES DE MORA (mock — futura pantalla de Ajustes)
+// ============================================================================
+/** Modo de actualización de deuda: 'INTERES_DIARIO' | 'REPOSICION' */
+const getModoMora = (): 'INTERES_DIARIO' | 'REPOSICION' =>
+  (localStorage.getItem('toko_modo_mora') as 'INTERES_DIARIO' | 'REPOSICION') || 'INTERES_DIARIO';
+
+/** Tasa mensual de interés en % (por defecto 10%) */
+const getTasaMensual = (): number =>
+  Number(localStorage.getItem('toko_tasa_mensual')) || 10;
+
+// Tipo enriquecido que incluye los campos de mora calculados
+export type MovimientoHistorial = {
+  id: string;
+  fechaHora: string;
+  tipo: 'COMPRA' | 'PAGO';
+  descripcion: string;
+  monto: number;
+  metodoPago?: string;
+  montoAbonado?: number;
+  vuelto?: number;
+  saldoAfectadoCC?: number;
+  items?: any[];
+  // Campos de mora calculados asincrónicamente
+  saldoActualizado: number;      // Monto con recargo aplicado (igual a monto si no hay recargo)
+  fueActualizado: boolean;       // true si se aplicó algún recargo
+  metodoActualizacion: string;   // Descripción del método y porcentaje
+  diasTranscurridos: number;     // Días desde la venta
+  porcentajeAplicado: number;    // % de recargo aplicado (0 si no aplica)
+};
 
 /**
  * ============================================================================
@@ -132,9 +163,11 @@ export const useClientesController = () => {
     }
   };
 
+  /**
+   * Versión síncrona del historial (datos crudos desde useLiveQuery).
+   * Se mantiene para compatibilidad con otros consumidores.
+   */
   const cargarHistorialCliente = (clienteId: string) => {
-    // Buscamos ventas del cliente. Pueden ser financiadas o totales.
-    // El POS ya guarda el objeto VentaRealizada.
     const compras = ventas
       .filter(v => v.cliente?.id === clienteId)
       .map(v => ({
@@ -142,9 +175,18 @@ export const useClientesController = () => {
         fechaHora: v.fechaHora,
         tipo: 'COMPRA' as const,
         descripcion: `Ticket #${v.numeroTicket}`,
-        monto: v.metodoPago === 'CUENTA_CORRIENTE' || v.total > 0 ? v.total : 0, 
+        monto: v.metodoPago === 'CUENTA_CORRIENTE' || v.total > 0 ? v.total : 0,
         metodoPago: v.metodoPago,
-        items: v.items
+        montoAbonado: v.montoAbonado,
+        vuelto: v.vuelto,
+        saldoAfectadoCC: v.saldoAfectadoCC,
+        items: v.items,
+        // Defaults para los campos de mora (se recalculan en calcularHistorialConMora)
+        saldoActualizado: v.total ?? 0,
+        fueActualizado: false,
+        metodoActualizacion: '',
+        diasTranscurridos: 0,
+        porcentajeAplicado: 0,
       }));
 
     const pagosRealizados = pagos
@@ -156,14 +198,119 @@ export const useClientesController = () => {
         descripcion: `Pago en ${p.metodoPago}`,
         monto: p.monto,
         metodoPago: p.metodoPago,
-        items: []
+        items: [],
+        saldoActualizado: p.monto,
+        fueActualizado: false,
+        metodoActualizacion: '',
+        diasTranscurridos: 0,
+        porcentajeAplicado: 0,
       }));
 
-    // Ordenar de más reciente a más antiguo
-    return [...compras, ...pagosRealizados].sort((a, b) => 
+    return [...compras, ...pagosRealizados].sort((a, b) =>
       new Date(b.fechaHora).getTime() - new Date(a.fechaHora).getTime()
     );
   };
+
+  /**
+   * Motor Dual de Actualización de Deudas (Asíncrono).
+   * Calcula mora con dos modalidades configurables desde localStorage:
+   *   - INTERES_DIARIO: aplica tasa proporcional al tiempo transcurrido
+   *   - REPOSICION: recalcula precio con valores actuales del catálogo en Dexie
+   *
+   * Solo aplica recargos a ventas con saldo pendiente a Cuenta Corriente (saldoAfectadoCC > 0).
+   */
+  const calcularHistorialConMora = useCallback(async (clienteId: string): Promise<MovimientoHistorial[]> => {
+    const modoMora = getModoMora();
+    const tasaMensual = getTasaMensual();
+    const ahora = new Date();
+
+    const historialBase = cargarHistorialCliente(clienteId);
+
+    const historialEnriquecido = await Promise.all(
+      historialBase.map(async (mov): Promise<MovimientoHistorial> => {
+        // Solo los CARGOS (ventas) aplican mora
+        if (mov.tipo !== 'COMPRA') {
+          return { ...mov } as MovimientoHistorial;
+        }
+
+        const fechaMov = new Date(mov.fechaHora);
+        const diffMs = ahora.getTime() - fechaMov.getTime();
+        const diasTranscurridos = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        // Solo hay recargo si: (a) pasaron más de 30 días Y (b) había saldo enviado a CC
+        const tieneSaldoCC = (mov.saldoAfectadoCC ?? 0) > 0;
+        if (diasTranscurridos <= 30 || !tieneSaldoCC) {
+          return {
+            ...mov,
+            saldoActualizado: mov.monto,
+            fueActualizado: false,
+            metodoActualizacion: '',
+            diasTranscurridos,
+            porcentajeAplicado: 0,
+          } as MovimientoHistorial;
+        }
+
+        // ── MODO INTERÉS DIARIO ────────────────────────────────────────────
+        if (modoMora === 'INTERES_DIARIO') {
+          const porcentaje = (diasTranscurridos / 30) * tasaMensual;
+          const saldoActualizado = mov.monto * (1 + porcentaje / 100);
+
+          return {
+            ...mov,
+            saldoActualizado,
+            fueActualizado: true,
+            metodoActualizacion: `Mora: ${porcentaje.toFixed(1)}% (Interés Diario)`,
+            diasTranscurridos,
+            porcentajeAplicado: porcentaje,
+          } as MovimientoHistorial;
+        }
+
+        // ── MODO REPOSICIÓN (precio actual del catálogo) ──────────────────
+        if (modoMora === 'REPOSICION' && mov.items && mov.items.length > 0) {
+          // Consultamos precio actual de cada producto en Dexie en paralelo
+          const subtotalesActualizados = await Promise.all(
+            mov.items.map(async (item: any) => {
+              try {
+                const prodActual = await db.productos.get(item.producto.id);
+                if (prodActual) {
+                  return item.cantidad * prodActual.precioVenta;
+                }
+              } catch {
+                // Si no se encuentra, conservamos el valor original
+              }
+              return item.subtotal;
+            })
+          );
+
+          const saldoActualizado = subtotalesActualizados.reduce((acc, s) => acc + s, 0);
+          const diferencia = saldoActualizado - mov.monto;
+          const porcentajeEquivalente = mov.monto > 0 ? (diferencia / mov.monto) * 100 : 0;
+
+          return {
+            ...mov,
+            saldoActualizado,
+            fueActualizado: saldoActualizado !== mov.monto,
+            metodoActualizacion: 'Valores actualizados a precio actual de catálogo',
+            diasTranscurridos,
+            porcentajeAplicado: porcentajeEquivalente,
+          } as MovimientoHistorial;
+        }
+
+        // Fallback: sin recargo
+        return {
+          ...mov,
+          saldoActualizado: mov.monto,
+          fueActualizado: false,
+          metodoActualizacion: '',
+          diasTranscurridos,
+          porcentajeAplicado: 0,
+        } as MovimientoHistorial;
+      })
+    );
+
+    return historialEnriquecido;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ventas, pagos]);
 
   return {
     clientes: clientesConSaldo,
@@ -172,6 +319,7 @@ export const useClientesController = () => {
     guardarCliente,
     eliminarCliente,
     registrarPago,
-    cargarHistorialCliente
+    cargarHistorialCliente,
+    calcularHistorialConMora,
   };
 };
