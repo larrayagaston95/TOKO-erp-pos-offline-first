@@ -51,12 +51,13 @@ export const ConfiguracionView: React.FC<ConfiguracionViewProps> = ({
   const [tasaMensual, setTasaMensual] = useState<number>(
     Number(localStorage.getItem('toko_tasa_mensual')) || 10
   );
+  const [mostrarExito, setMostrarExito] = useState(false);
 
   const guardarAjustesCuentaCorriente = () => {
     localStorage.setItem('toko_modo_mora', modoMora);
     localStorage.setItem('toko_tasa_mensual', tasaMensual.toString());
-    setMensajeExito('✓ Políticas de Cuenta Corriente actualizadas correctamente.');
-    setTimeout(() => setMensajeExito(null), 3000);
+    setMostrarExito(true);
+    setTimeout(() => setMostrarExito(false), 3000);
   };
 
   // Consultas en tiempo real a las tablas de Dexie
@@ -293,7 +294,7 @@ export const ConfiguracionView: React.FC<ConfiguracionViewProps> = ({
               <option value="INTERES_DIARIO">Interés Financiero Diario (%)</option>
               <option value="REPOSICION">Actualización a Precio de Góndola actual</option>
             </select>
-            <p className="text-[10px] text-slate-400 mt-1">Aplica sobre el saldo fiado cuando la deuda supera los 30 días.</p>
+            <p className="text-[10px] text-slate-400 mt-1">Interés: aplica luego de 30 días. Reposición: aplica siempre al valor actual.</p>
           </div>
 
           <div>
@@ -312,7 +313,13 @@ export const ConfiguracionView: React.FC<ConfiguracionViewProps> = ({
           </div>
         </div>
 
-        <div className="pt-2 flex justify-end">
+        <div className="pt-2 flex justify-end items-center gap-3">
+          {mostrarExito && (
+            <span className="text-xs font-bold text-emerald-600 animate-in fade-in flex items-center gap-1.5">
+              <CheckCircle2 className="h-4 w-4" />
+              Cambios guardados correctamente
+            </span>
+          )}
           <button
             type="button"
             onClick={guardarAjustesCuentaCorriente}

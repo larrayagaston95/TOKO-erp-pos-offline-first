@@ -17,6 +17,10 @@ export const DetalleCuentaCorriente: React.FC<Props> = ({ cliente, controlador, 
   const [historialConMora, setHistorialConMora] = useState<MovimientoHistorial[]>([]);
   const [cargandoMora, setCargandoMora] = useState(true);
 
+  // Obtenemos el historial base (síncrono y reactivo a Dexie) para forzar la recarga
+  // si hay nuevas ventas o pagos, o si el usuario vuelve a esta vista.
+  const historialBaseReactivo = controlador.cargarHistorialCliente(cliente.id);
+
   useEffect(() => {
     let vigente = true;
     setCargandoMora(true);
@@ -27,7 +31,7 @@ export const DetalleCuentaCorriente: React.FC<Props> = ({ cliente, controlador, 
       }
     });
     return () => { vigente = false; };
-  }, [cliente.id, controlador.calcularHistorialConMora]);
+  }, [cliente.id, controlador.calcularHistorialConMora, historialBaseReactivo.length]);
 
   // ── SALDO ACTUALIZADO (sumatoria de saldos con mora – pagos) ───────────
   const saldoTotalConMora = (() => {
@@ -52,13 +56,13 @@ export const DetalleCuentaCorriente: React.FC<Props> = ({ cliente, controlador, 
   };
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-2xl border border-slate-200/80 shadow-lg overflow-hidden animate-in fade-in">
+    <div className="flex flex-col h-full bg-white rounded-2xl border border-slate-200/80 shadow-lg overflow-y-auto pb-12 animate-in fade-in">
       {/* HEADER */}
-      <div className="bg-slate-900 p-6 text-white shrink-0 relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-8 opacity-5">
-          <Wallet className="w-48 h-48 text-white" />
+      <div className="bg-slate-900 py-4 px-6 text-white shrink-0 relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-5">
+          <Wallet className="w-32 h-32 text-white" />
         </div>
-        <div className="relative z-10 flex items-center justify-between mb-6">
+        <div className="relative z-10 flex items-center justify-between mb-2">
           <button
             onClick={alVolver}
             className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors text-sm font-bold bg-white/10 px-4 py-2 rounded-xl"
@@ -67,15 +71,15 @@ export const DetalleCuentaCorriente: React.FC<Props> = ({ cliente, controlador, 
           </button>
         </div>
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h3 className="text-2xl font-black flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                <Wallet className="h-6 w-6" />
+            <h3 className="text-xl font-black flex items-center gap-2">
+              <div className="p-1.5 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                <Wallet className="h-5 w-5" />
               </div>
               Estado de Cuenta
             </h3>
-            <p className="text-slate-300 font-medium mt-2">{cliente.nombre} • {cliente.documento}</p>
+            <p className="text-slate-300 font-medium mt-1 text-sm">{cliente.nombre} • {cliente.documento}</p>
           </div>
 
           <div className="flex flex-col items-start md:items-end gap-3">
@@ -89,10 +93,10 @@ export const DetalleCuentaCorriente: React.FC<Props> = ({ cliente, controlador, 
                 </div>
               ) : hayRecargos ? (
                 <div className="flex flex-col md:items-end">
-                  <span className="text-sm font-bold text-slate-500 line-through mb-0.5">
+                  <span className="text-xs font-bold text-slate-500 line-through mb-0.5">
                     ${cliente.saldoCalculado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </span>
-                  <p className="text-4xl sm:text-5xl font-mono font-black text-rose-400">
+                  <p className="text-3xl sm:text-4xl font-mono font-black text-rose-400">
                     ${saldoTotalConMora.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </p>
                   <p className="text-rose-400/80 text-[10px] font-bold mt-1 uppercase text-right tracking-wider bg-rose-500/20 px-2 py-0.5 rounded-md">
@@ -101,7 +105,7 @@ export const DetalleCuentaCorriente: React.FC<Props> = ({ cliente, controlador, 
                 </div>
               ) : (
                 <>
-                  <p className={`text-4xl sm:text-5xl font-mono font-black ${esDeudor ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  <p className={`text-3xl sm:text-4xl font-mono font-black ${esDeudor ? 'text-rose-400' : 'text-emerald-400'}`}>
                     ${cliente.saldoCalculado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </p>
                   {esDeudor && (
@@ -116,7 +120,7 @@ export const DetalleCuentaCorriente: React.FC<Props> = ({ cliente, controlador, 
                   setMontoPago(saldoTotalConMora);
                   setModalPagoAbierto(true);
                 }}
-                className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer w-full md:w-auto justify-center"
+                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer w-full md:w-auto justify-center"
               >
                 <CreditCard className="h-4 w-4" /> Registrar Pago
               </button>
@@ -126,12 +130,12 @@ export const DetalleCuentaCorriente: React.FC<Props> = ({ cliente, controlador, 
       </div>
 
       {/* TIMELINE / HISTORIAL */}
-      <div className="flex-1 overflow-y-auto bg-slate-50 p-6">
-        <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-6 flex items-center gap-2">
+      <div className="flex flex-col bg-white rounded-b-xl p-6">
+        <h4 className="shrink-0 text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
           Historial de Movimientos
         </h4>
 
-        <div className="space-y-6">
+        <div className="space-y-6 pr-2 pb-8">
           {cargandoMora ? (
             <div className="text-center py-12 text-slate-400 font-medium bg-white rounded-2xl border border-slate-200 border-dashed flex flex-col items-center gap-3">
               <RefreshCw className="h-8 w-8 animate-spin text-indigo-400" />

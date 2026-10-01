@@ -237,9 +237,8 @@ export const useClientesController = () => {
         const diffMs = ahora.getTime() - fechaMov.getTime();
         const diasTranscurridos = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-        // Solo hay recargo si: (a) pasaron más de 30 días Y (b) había saldo enviado a CC
         const tieneSaldoCC = (mov.saldoAfectadoCC ?? 0) > 0;
-        if (diasTranscurridos <= 30 || !tieneSaldoCC) {
+        if (!tieneSaldoCC || (modoMora === 'INTERES_DIARIO' && diasTranscurridos <= 30)) {
           return {
             ...mov,
             saldoActualizado: mov.monto,
@@ -253,7 +252,11 @@ export const useClientesController = () => {
         // ── MODO INTERÉS DIARIO ────────────────────────────────────────────
         if (modoMora === 'INTERES_DIARIO') {
           const porcentaje = (diasTranscurridos / 30) * tasaMensual;
-          const saldoActualizado = mov.monto * (1 + porcentaje / 100);
+          
+          // La mora se aplica SOBRE LO QUE SE FIÓ, no sobre el ticket entero si hubo pago parcial
+          const saldoAfectadoCCOriginal = mov.saldoAfectadoCC ?? mov.monto;
+          const incrementoMora = saldoAfectadoCCOriginal * (porcentaje / 100);
+          const saldoActualizado = mov.monto + incrementoMora;
 
           return {
             ...mov,
@@ -267,24 +270,43 @@ export const useClientesController = () => {
 
         // ── MODO REPOSICIÓN (precio actual del catálogo) ──────────────────
         if (modoMora === 'REPOSICION' && mov.items && mov.items.length > 0) {
+          console.group(`DEBUG CÁLCULO REPOSICIÓN - TICKET: ${mov.id}`);
+          console.log('1. Valores Originales -> Total Ticket:', mov.monto, '| Saldo Enviado a CC:', mov.saldoAfectadoCC);
+
           // Consultamos precio actual de cada producto en Dexie en paralelo
           const subtotalesActualizados = await Promise.all(
             mov.items.map(async (item: any) => {
               try {
                 const prodActual = await db.productos.get(item.producto.id);
+                console.log(`   -> Item: ${item.producto.nombre} (ID: ${item.producto.id})`);
+                console.log(`      Cant: ${item.cantidad} | Precio Histórico: $${item.precioUnitario} | Precio Actual BD: $${prodActual ? prodActual.precioVenta : 'NO ENCONTRADO'}`);
                 if (prodActual) {
                   return item.cantidad * prodActual.precioVenta;
                 }
-              } catch {
-                // Si no se encuentra, conservamos el valor original
+              } catch (err) {
+                console.error('Error buscando producto en reposición:', err);
               }
-              return item.subtotal;
+              // Fallback estricto al precio original si se eliminó el producto
+              return item.cantidad * (item.precioUnitario || (item.subtotal / item.cantidad));
             })
           );
 
-          const saldoActualizado = subtotalesActualizados.reduce((acc, s) => acc + s, 0);
-          const diferencia = saldoActualizado - mov.monto;
-          const porcentajeEquivalente = mov.monto > 0 ? (diferencia / mov.monto) * 100 : 0;
+          const nuevoTotalMora = subtotalesActualizados.reduce((acc, s) => acc + s, 0);
+          console.log('2. Sumatoria Final Recalculada:', nuevoTotalMora);
+          
+          // CRÍTICO: Proporcionalidad para pagos parciales
+          const factorAumento = mov.monto > 0 ? (nuevoTotalMora / mov.monto) : 1;
+          const saldoAfectadoCCOriginal = mov.saldoAfectadoCC ?? mov.monto;
+          const nuevoSaldoAfectadoCC = saldoAfectadoCCOriginal * factorAumento;
+          
+          console.log('3. Saldo Afectado Original vs Nuevo Total:', saldoAfectadoCCOriginal, 'vs', nuevoSaldoAfectadoCC);
+          console.groupEnd();
+
+          // El incremento real de la deuda es solo lo que subió la parte fiada
+          const incrementoDeuda = nuevoSaldoAfectadoCC - saldoAfectadoCCOriginal;
+          const saldoActualizado = mov.monto + incrementoDeuda;
+          
+          const porcentajeEquivalente = mov.monto > 0 ? (incrementoDeuda / mov.monto) * 100 : 0;
 
           return {
             ...mov,
