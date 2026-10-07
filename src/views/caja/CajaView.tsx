@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useCajaController } from '../../controllers/useCajaController';
 import {
   DollarSign, Clock, User, ArrowDownLeft, ArrowUpRight,
@@ -48,6 +48,21 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
 
   // Estado para el visor de PDF del reporte general
   const [formatoPdfGeneral, setFormatoPdfGeneral] = useState<'a4' | 'ticket' | null>(null);
+
+  // ¿Hubo algún cierre parcial desde el último cierre final?
+  const puedeHacerCierreFinal = useMemo(() => {
+    const turnosCerradosOrdenados = [...todos_los_turnos]
+      .filter(t => t.estado === 'CERRADA' && t.fechaCierre)
+      .sort((a, b) => new Date(b.fechaCierre!).getTime() - new Date(a.fechaCierre!).getTime());
+    
+    const idxUltimoFinal = turnosCerradosOrdenados.findIndex(t => t.tipoCierre === 'FINAL');
+    
+    const turnosDesdeUltimoFinal = idxUltimoFinal === -1 
+      ? turnosCerradosOrdenados 
+      : turnosCerradosOrdenados.slice(0, idxUltimoFinal);
+      
+    return turnosDesdeUltimoFinal.some(t => t.tipoCierre === 'PARCIAL');
+  }, [todos_los_turnos]);
 
   /** Formatea montos en pesos argentinos. */
   const formatearPeso = (monto: number) =>
@@ -246,13 +261,28 @@ export const CajaView: React.FC<CajaViewProps> = ({ usuarioAutenticado }) => {
                   Cerrar Turno (Cierre Parcial)
                 </button>
                 {usuarioAutenticado.rol === 'ADMIN' && (
-                  <button
-                    onClick={() => setModalCierre('FINAL')}
-                    className="flex items-center justify-center gap-3 bg-rose-50 border-2 border-rose-200 hover:bg-rose-100 text-rose-800 rounded-2xl p-5 font-black text-base transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer shadow-sm"
-                  >
-                    <Lock className="h-6 w-6 text-rose-600" />
-                    Cierre Final del Día
-                  </button>
+                  <div className="relative group">
+                    <button
+                      onClick={() => {
+                        if (puedeHacerCierreFinal) setModalCierre('FINAL');
+                      }}
+                      disabled={!puedeHacerCierreFinal}
+                      className={`w-full flex items-center justify-center gap-3 bg-rose-50 border-2 rounded-2xl p-5 font-black text-base transition-all shadow-sm ${
+                        !puedeHacerCierreFinal
+                          ? 'border-rose-100 text-rose-300 opacity-60 cursor-not-allowed'
+                          : 'border-rose-200 hover:bg-rose-100 text-rose-800 hover:-translate-y-0.5 active:scale-95 cursor-pointer'
+                      }`}
+                    >
+                      <Lock className={`h-6 w-6 ${!puedeHacerCierreFinal ? 'text-rose-300' : 'text-rose-600'}`} />
+                      Cierre Final del Día
+                    </button>
+                    {!puedeHacerCierreFinal && (
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[280px] px-3 py-2 bg-slate-800 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center leading-tight whitespace-normal">
+                        Debe realizar un cierre parcial previo antes de ejecutar el Arqueo Z final.
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </>

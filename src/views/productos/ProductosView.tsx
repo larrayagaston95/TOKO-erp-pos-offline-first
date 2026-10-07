@@ -7,7 +7,7 @@
  * ABM: Alta, Baja y Modificación de productos via Dexie.js (IndexedDB).
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Package,
@@ -31,6 +31,7 @@ import { ModalConfirmacion } from '../../components/ui/ModalConfirmacion';
 import { GestorCategoriasModal } from './GestorCategoriasModal';
 import { useProveedoresController } from '../../controllers/useProveedoresController';
 import { ProveedorModal } from './ProveedorModal';
+import { ModalTaxonomias } from './ModalTaxonomias';
 import { Proveedor } from '../../models/proveedor.model';
 
 // ─── Valores iniciales para el formulario ───────────────────────────────────
@@ -72,6 +73,80 @@ const Campo: React.FC<CampoProps> = ({ label, children }) => (
   </div>
 );
 
+
+// ─── Componente: Combo Buscable con Autocompletado ───────────────────────────
+interface ComboBuscableProps {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+  onAdd: () => void;
+  disabled?: boolean;
+}
+const ComboBuscable: React.FC<ComboBuscableProps> = ({ label, value, options, onChange, onAdd }) => {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filtered = options.filter(o => o.toLowerCase().includes(query.toLowerCase()));
+
+  return (
+    <Campo label={label}>
+      <div className="relative flex items-center gap-1" ref={ref}>
+        <div className="relative flex-1">
+          <input
+            type="text"
+            className={`${inputCls} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={disabled}
+            placeholder="Buscar o seleccionar..."
+            value={open ? query : value}
+            onFocus={() => { setQuery(''); setOpen(true); }}
+            onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          />
+          {open && (
+            <div className="absolute z-50 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1">
+              {filtered.map(o => (
+                <button
+                  key={o}
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-teal-50 hover:text-teal-900 rounded-lg"
+                  onClick={() => { onChange(o); setOpen(false); }}
+                >
+                  {o}
+                </button>
+              ))}
+              {filtered.length === 0 && (
+                <div className="p-2 text-xs text-slate-500">
+                  No hay coincidencias.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={disabled}
+          className={`p-2 bg-teal-50 text-teal-600 rounded-xl border border-teal-100 transition-colors shrink-0 ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-teal-100'}`}
+          title={`Añadir ${label}`}
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+    </Campo>
+  );
+};
+
 const inputCls =
   'px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 outline-hidden focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all w-full';
 
@@ -92,6 +167,52 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
 
   const { categorias } = useCategoriasController();
+
+  const dbRubros = useLiveQuery(() => db.rubros.toArray()) || [];
+  const dbMarcasAll = useLiveQuery(() => db.marcas.toArray()) || [];
+  const dbCategoriasAll = useLiveQuery(() => db.categorias.toArray()) || [];
+  const dbSubCategoriasAll = useLiveQuery(() => db.subcategorias.toArray()) || [];
+  const dbProveedoresAll = useLiveQuery(() => db.proveedores.toArray()) || [];
+
+  // Lógica de Cascada (filtramos por el ID del padre seleccionado)
+  const rubroActualId = dbRubros.find(r => r.nombre === form.rubro)?.id;
+  const dbMarcas = dbMarcasAll.filter(m => !rubroActualId || m.rubro_id === rubroActualId);
+  
+  const marcaActualId = dbMarcasAll.find(m => m.nombre === form.marca)?.id;
+  const dbCategorias = dbCategoriasAll.filter(c => 
+    (!rubroActualId || c.rubro_id === rubroActualId) && 
+    (!marcaActualId || c.marca_id === marcaActualId)
+  );
+
+  const categoriaActualId = dbCategoriasAll.find(c => c.nombre === form.categoria)?.id;
+  const dbSubCategorias = dbSubCategoriasAll.filter(s => !categoriaActualId || s.categoria_id === categoriaActualId);
+
+  const handleAddTaxonomy = async (store: 'rubros' | 'categorias' | 'marcas' | 'subcategorias' | 'proveedores', label: string, campoForm: keyof typeof form) => {
+    const valor = window.prompt(`Ingrese el nombre de ${label}:`);
+    if (valor && valor.trim() !== '') {
+      try {
+        let payload: any = { nombre: valor.trim(), empresa_id: 'emp-1' };
+        
+        if (store === 'proveedores') {
+          payload = { razon_social: valor.trim(), empresa_id: 'emp-1' };
+        } else if (store === 'marcas') {
+          if (rubroActualId) payload.rubro_id = rubroActualId;
+        } else if (store === 'categorias') {
+          if (rubroActualId) payload.rubro_id = rubroActualId;
+          if (marcaActualId) payload.marca_id = marcaActualId;
+        } else if (store === 'subcategorias') {
+          if (categoriaActualId) payload.categoria_id = categoriaActualId;
+        }
+
+        await (db[store] as any).add(payload);
+        actualizar(campoForm, valor.trim());
+      } catch (err) {
+        console.error('Error guardando en', store, err);
+      }
+    }
+  };
+
+
   const [modalConfirmacionAbierto, setModalConfirmacionAbierto] = useState(false);
 
   const actualizar = (campo: keyof typeof form, valor: string | number) =>
@@ -104,6 +225,40 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
     if (!form.codigoBarras.trim()) { setError('El código de barras es obligatorio.'); return; }
     
     setModalConfirmacionAbierto(true);
+  };
+
+  const manejarImagen = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 150;
+        canvas.height = 150;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const ratio = Math.max(150 / img.width, 150 / img.height);
+          const drawWidth = img.width * ratio;
+          const drawHeight = img.height * ratio;
+          const drawX = (150 - drawWidth) / 2;
+          const drawY = (150 - drawHeight) / 2;
+          
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, 150, 150);
+          ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+          
+          const base64 = canvas.toDataURL('image/webp', 0.7);
+          actualizar('imagenUrl', base64);
+        }
+      };
+      if (event.target?.result) {
+        img.src = event.target.result as string;
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const ejecutarGuardado = async () => {
@@ -179,134 +334,177 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <Campo label="Nombre del artículo">
-                <input
-                  type="text"
-                  value={form.nombre}
-                  onChange={(e) => actualizar('nombre', e.target.value)}
-                  placeholder="Ej: Aceite de Girasol Natura 900ml"
-                  className={inputCls}
-                />
-              </Campo>
-            </div>
-
-            <Campo label="Código de barras (EAN)">
-              <input
-                type="text"
-                value={form.codigoBarras}
-                onChange={(e) => actualizar('codigoBarras', e.target.value)}
-                placeholder="7790070411802"
-                className={inputCls}
-              />
-            </Campo>
-
-            <Campo label="Categoría">
-              <select
-                value={form.categoria}
-                onChange={(e) => actualizar('categoria', e.target.value as CategoriaProducto)}
-                className={inputCls}
-              >
-                <option value="" disabled>Seleccione un rubro...</option>
-                {categorias.map((c) => (
-                  <option key={c.id} value={c.nombre}>{c.nombre}</option>
-                ))}
-              </select>
-            </Campo>
-
-            <Campo label="Precio Mostrador ($)">
-              <input
-                type="number"
-                min={0}
-                step={0.01}
-                value={form.precioVenta}
-                onChange={(e) => actualizar('precioVenta', e.target.value)}
-                className={inputCls}
-              />
-            </Campo>
-
-            <Campo label="Precio Mayorista ($)">
-              <input
-                type="number"
-                min={0}
-                step={0.01}
-                value={form.precioMayorista}
-                onChange={(e) => actualizar('precioMayorista', e.target.value)}
-                className={inputCls}
-              />
-            </Campo>
-
-            <Campo label="Stock actual (u.)">
-              <input
-                type="number"
-                min={0}
-                value={form.stock}
-                onChange={(e) => actualizar('stock', e.target.value)}
-                className={inputCls}
-              />
-            </Campo>
-
-            <Campo label="Stock mínimo (u.)">
-              <input
-                type="number"
-                min={0}
-                value={form.stockMinimo}
-                onChange={(e) => actualizar('stockMinimo', e.target.value)}
-                className={inputCls}
-              />
-            </Campo>
-
-            <Campo label="Unidad de medida">
-              <select
-                value={form.unidadMedida}
-                onChange={(e) => actualizar('unidadMedida', e.target.value as Producto['unidadMedida'])}
-                className={inputCls}
-              >
-                <option value="UNIDAD">UNIDAD</option>
-                <option value="KG">KG</option>
-                <option value="PACK">PACK</option>
-              </select>
-            </Campo>
-
-            <div className="col-span-2">
-              <Campo label="URL de imagen (opcional)">
-                <input
-                  type="url"
-                  value={form.imagenUrl}
-                  onChange={(e) => actualizar('imagenUrl', e.target.value)}
-                  placeholder="https://..."
-                  className={inputCls}
-                />
-              </Campo>
-            </div>
-
-            {/* ─── Campos de Categorización Avanzada ─── */}
-            <div className="col-span-2 pt-2 border-t border-slate-100">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-teal-700 mb-3">Categorización Avanzada</p>
+          <div className="flex flex-col gap-6">
+            {/* ─── SECCIÓN 1: DATOS BÁSICOS Y TAXONOMÍA ─── */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-teal-700 mb-3 border-b border-slate-100 pb-1">Datos Básicos y Categorización</p>
               <div className="grid grid-cols-2 gap-4">
-                <Campo label="Marca">
-                  <input type="text" value={form.marca || ''} onChange={(e) => actualizar('marca', e.target.value)} placeholder="Ej: Coca-Cola" className={inputCls} />
+                <div className="col-span-2">
+                  <Campo label="Nombre del artículo">
+                    <input
+                      type="text"
+                      value={form.nombre}
+                      onChange={(e) => actualizar('nombre', e.target.value)}
+                      placeholder="Ej: Aceite de Girasol Natura 900ml"
+                      className={inputCls}
+                    />
+                  </Campo>
+                </div>
+                <Campo label="Código de barras (EAN)">
+                  <input
+                    type="text"
+                    value={form.codigoBarras}
+                    onChange={(e) => actualizar('codigoBarras', e.target.value)}
+                    placeholder="7790070411802"
+                    className={inputCls}
+                  />
                 </Campo>
-                <Campo label="Proveedor">
-                  <input type="text" value={form.proveedor || ''} onChange={(e) => actualizar('proveedor', e.target.value)} placeholder="Ej: Distribuidora Norte" className={inputCls} />
-                </Campo>
-                <Campo label="Rubro">
-                  <input type="text" value={form.rubro || ''} onChange={(e) => actualizar('rubro', e.target.value)} placeholder="Ej: Lácteos Frescos" className={inputCls} />
-                </Campo>
-                <Campo label="Sub-Categoría">
-                  <input type="text" value={form.subCategoria || ''} onChange={(e) => actualizar('subCategoria', e.target.value)} placeholder="Ej: Aguas con gas" className={inputCls} />
-                </Campo>
+                <ComboBuscable
+                  label="Rubro"
+                  value={form.rubro || ''}
+                  options={dbRubros.map(r => r.nombre)}
+                  onChange={(v) => actualizar('rubro', v)}
+                  onAdd={() => handleAddTaxonomy('rubros', 'el nuevo Rubro', 'rubro')}
+                />
+                
+                {/* Combos dependientes */}
+                <ComboBuscable
+                  label="Marca"
+                  value={form.marca || ''}
+                  options={dbMarcas.map(m => m.nombre)}
+                  onChange={(v) => actualizar('marca', v)}
+                  onAdd={() => handleAddTaxonomy('marcas', 'la nueva Marca', 'marca')}
+                  disabled={!form.rubro}
+                />
+                <ComboBuscable
+                  label="Categoría"
+                  value={form.categoria}
+                  options={dbCategorias.map(c => c.nombre)}
+                  onChange={(v) => actualizar('categoria', v as any)}
+                  onAdd={() => handleAddTaxonomy('categorias', 'la nueva Categoría', 'categoria')}
+                  disabled={!form.rubro}
+                />
+                <ComboBuscable
+                  label="Sub-Categoría"
+                  value={form.subCategoria || ''}
+                  options={dbSubCategorias.map(s => s.nombre)}
+                  onChange={(v) => actualizar('subCategoria', v)}
+                  onAdd={() => handleAddTaxonomy('subcategorias', 'la nueva Sub-Categoría', 'subCategoria')}
+                  disabled={!form.categoria}
+                />
+                <ComboBuscable
+                  label="Proveedor"
+                  value={form.proveedor || ''}
+                  options={dbProveedoresAll.map(p => p.razon_social)}
+                  onChange={(v) => actualizar('proveedor', v)}
+                  onAdd={() => handleAddTaxonomy('proveedores', 'el nuevo Proveedor', 'proveedor')}
+                />
+              </div>
+            </div>
+
+            {/* ─── SECCIÓN 2: PRECIOS ─── */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-teal-700 mb-3 border-b border-slate-100 pb-1">Precios</p>
+              <div className="grid grid-cols-3 gap-4">
                 <Campo label="Precio Costo ($)">
-                  <input type="number" min={0} step={0.01} value={form.precioCosto || 0} onChange={(e) => actualizar('precioCosto', e.target.value)} className={inputCls} />
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={form.precioCosto || 0}
+                    onChange={(e) => actualizar('precioCosto', e.target.value)}
+                    className={inputCls}
+                  />
+                </Campo>
+                <Campo label="Precio Mostrador ($)">
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={form.precioVenta}
+                    onChange={(e) => actualizar('precioVenta', e.target.value)}
+                    className={inputCls}
+                  />
+                </Campo>
+                <Campo label="Precio Mayorista ($)">
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={form.precioMayorista}
+                    onChange={(e) => actualizar('precioMayorista', e.target.value)}
+                    className={inputCls}
+                  />
                 </Campo>
               </div>
             </div>
-          </div>
-          </div>
 
-          {/* Pie */}
-          <div className="flex items-center justify-end gap-2.5 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+            {/* ─── SECCIÓN 3: STOCK Y MULTIMEDIA ─── */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-teal-700 mb-3 border-b border-slate-100 pb-1">Stock e Imagen</p>
+              <div className="grid grid-cols-3 gap-4">
+                <Campo label="Stock actual (u.)">
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.stock}
+                    onChange={(e) => actualizar('stock', e.target.value)}
+                    className={inputCls}
+                  />
+                </Campo>
+                <Campo label="Stock mínimo (u.)">
+                  <input
+                    type="number"
+                    min={0}
+                    value={form.stockMinimo}
+                    onChange={(e) => actualizar('stockMinimo', e.target.value)}
+                    className={inputCls}
+                  />
+                </Campo>
+                <Campo label="Unidad de medida">
+                  <select
+                    value={form.unidadMedida}
+                    onChange={(e) => actualizar('unidadMedida', e.target.value as any)}
+                    className={inputCls}
+                  >
+                    <option value="UNIDAD">UNIDAD</option>
+                    <option value="KG">KG</option>
+                    <option value="PACK">PACK</option>
+                  </select>
+                </Campo>
+
+                <div className="col-span-3 mt-2">
+                  <Campo label="Imagen del Producto (Opcional)">
+                    <div className="flex items-center gap-4 p-2 border border-slate-200 border-dashed rounded-xl bg-slate-50">
+                      {form.imagenUrl ? (
+                        <div className="relative group shrink-0">
+                          <img src={form.imagenUrl} alt="Preview" className="w-14 h-14 rounded-lg object-cover border border-slate-200 bg-white" />
+                          <button type="button" onClick={() => actualizar('imagenUrl', '')} className="absolute -top-2 -right-2 bg-rose-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"><X className="h-3 w-3" /></button>
+                        </div>
+                      ) : (
+                        <div className="w-14 h-14 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-300 shrink-0">
+                          <Package className="h-6 w-6" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={manejarImagen}
+                          className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 cursor-pointer"
+                        />
+                        <p className="text-[9px] text-slate-400 mt-1 truncate">Se redimensionará y comprimirá automáticamente a WebP para ahorrar espacio.</p>
+                      </div>
+                    </div>
+                  </Campo>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Pie */}
+        <div className="flex items-center justify-end gap-2.5 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
           <button
             type="button"
             onClick={onCerrar}
@@ -539,6 +737,11 @@ export const ProductosView: React.FC = () => {
       />
 
 
+      <ModalTaxonomias 
+        estaAbierto={modalCategoriasAbierto} 
+        alCerrar={() => setModalCategoriasAbierto(false)} 
+      />
+
       {/* ── Modal Actualización Masiva ── */}
       {modalMasivo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
@@ -636,70 +839,74 @@ export const ProductosView: React.FC = () => {
       {pestanaActiva === 'inventario' && (
         <>
           {/* Cabecera del Módulo */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-lg shadow-teal-900/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="p-2 rounded-xl bg-teal-50 text-teal-600 border border-teal-100">
-              <Package className="h-5 w-5" />
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-lg shadow-teal-900/5 flex flex-col gap-4 shrink-0">
+            {/* Fila 1: Títulos y Botonera */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2.5 mb-1">
+                  <div className="p-2 rounded-xl bg-teal-50 text-teal-600 border border-teal-100">
+                    <Package className="h-5 w-5" />
+                  </div>
+                  <h2 className="text-lg font-black text-slate-900">Catálogo de Productos e Inventario</h2>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Control de existencias físicas, precios diferenciados y códigos EAN de barras.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap pb-2 sm:pb-0">
+                <button
+                  type="button"
+                  onClick={() => setVerStockCritico(!verStockCritico)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm border whitespace-nowrap ${
+                    verStockCritico 
+                      ? 'bg-amber-100 text-amber-800 border-amber-300 ring-2 ring-amber-500/20' 
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <AlertTriangle className={`h-4 w-4 ${verStockCritico ? 'text-amber-600' : 'text-slate-400'}`} />
+                  <span>⚠️ Ver Stock Crítico</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalMasivo(true)}
+                  className="px-4 py-2 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:-translate-y-0.5 whitespace-nowrap"
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  <span>Actualización Masiva</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalCategoriasAbierto(true)}
+                  className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:-translate-y-0.5 active:scale-95 whitespace-nowrap"
+                >
+                  <span className="text-sm">⚙️</span>
+                  <span>Configurar Rubros</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalAlta(true)}
+                  className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-teal-600/20 hover:-translate-y-0.5 active:scale-95 whitespace-nowrap"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Nuevo Artículo</span>
+                </button>
+              </div>
             </div>
-            <h2 className="text-lg font-black text-slate-900">Catálogo de Productos e Inventario</h2>
-          </div>
-          <p className="text-xs text-slate-500">
-            Control de existencias físicas, precios diferenciados y códigos EAN de barras.
-          </p>
-        </div>
 
-        <div className="flex items-center gap-2.5">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-teal-600" />
-            <input
-              type="text"
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar por descripción o código de barras..."
-              className="pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 outline-hidden focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 w-64 transition-all shadow-2xs"
-            />
+            {/* Fila 2: Buscador Principal */}
+            <div className="relative max-w-2xl w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-teal-600" />
+              <input
+                type="text"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar por descripción o código de barras..."
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 outline-hidden focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all shadow-2xs"
+              />
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setVerStockCritico(!verStockCritico)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm border ${
-              verStockCritico 
-                ? 'bg-amber-100 text-amber-800 border-amber-300 ring-2 ring-amber-500/20' 
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <AlertTriangle className={`h-4 w-4 ${verStockCritico ? 'text-amber-600' : 'text-slate-400'}`} />
-            <span>⚠️ Ver Stock Crítico</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setModalMasivo(true)}
-            className="px-4 py-2 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:-translate-y-0.5"
-          >
-            <TrendingUp className="h-4 w-4" />
-            <span>Actualización Masiva</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setModalCategoriasAbierto(true)}
-            className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:-translate-y-0.5 active:scale-95"
-          >
-            <span className="text-sm">⚙️</span>
-            <span>Configurar Rubros</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setModalAlta(true)}
-            className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-teal-600/20 hover:-translate-y-0.5 active:scale-95"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Nuevo Artículo</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Tabla de Artículos */}
+          \n      {/* Tabla de Artículos */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-lg shadow-teal-900/5 overflow-hidden flex-1 flex flex-col min-h-0">
         <div className="flex-1 overflow-y-auto">
           <table className="w-full text-left border-collapse min-w-[900px]">

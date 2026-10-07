@@ -45,6 +45,9 @@ export class OmniPosDatabase extends Dexie {
   empleados!: Table<Empleado, string>;
   categorias!: Table<Categoria, string>;
   proveedores!: Table<Proveedor, string>;
+  marcas!: Table<any, string>;
+  rubros!: Table<any, string>;
+  subcategorias!: Table<any, string>;
 
   constructor() {
     super('OmniPosDB');
@@ -83,6 +86,40 @@ export class OmniPosDatabase extends Dexie {
       empleados: 'id, usuario, rol',
       categorias: 'id, empresa_id, nombre',
       proveedores: 'id, empresa_id, razon_social'
+    });
+
+    // Versión 9: Agrega marcas, rubros, subcategorias
+    this.version(9).stores({
+      productos: 'id, codigoBarras, categoria, nombre',
+      clientes: 'id, codigo, nombre, tipo, zonaRuta',
+      ventas: 'id, numeroTicket, fechaHora, tipoOperacion, estadoSync, turnoId',
+      sync_outbox: 'id, tipoOperacion, referenciaId, estado, fechaCreacion',
+      movimientos_caja: 'id, fechaHora, tipo, turnoId',
+      pagos_cc: 'id, clienteId, fechaHora, estadoSync',
+      turnos_caja: 'id, estado, cajero, fechaApertura',
+      empleados: 'id, usuario, rol',
+      categorias: 'id, empresa_id, nombre',
+      proveedores: 'id, empresa_id, razon_social',
+      marcas: 'id, empresa_id, nombre',
+      rubros: 'id, empresa_id, nombre',
+      subcategorias: 'id, empresa_id, nombre'
+    });
+
+    // Versión 10: Taxonomía relacional en cascada
+    this.version(10).stores({
+      productos: 'id, codigoBarras, categoria, nombre',
+      clientes: 'id, codigo, nombre, tipo, zonaRuta',
+      ventas: 'id, numeroTicket, fechaHora, tipoOperacion, estadoSync, turnoId',
+      sync_outbox: 'id, tipoOperacion, referenciaId, estado, fechaCreacion',
+      movimientos_caja: 'id, fechaHora, tipo, turnoId',
+      pagos_cc: 'id, clienteId, fechaHora, estadoSync',
+      turnos_caja: 'id, estado, cajero, fechaApertura',
+      empleados: 'id, usuario, rol',
+      categorias: '++id, empresa_id, nombre, rubro_id, marca_id',
+      proveedores: '++id, empresa_id, razon_social',
+      marcas: '++id, empresa_id, nombre, rubro_id',
+      rubros: '++id, empresa_id, nombre',
+      subcategorias: '++id, empresa_id, nombre, categoria_id'
     });
 
     // Seeder automático al crear la base de datos (cuando está vacía)

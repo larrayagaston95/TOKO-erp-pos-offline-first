@@ -2,12 +2,12 @@
  * ============================================================================
  * CONTROLADOR: PUNTO DE VENTA (usePosController)
  * ============================================================================
- * Contiene toda la lÃ³gica de negocio para la terminal de mostrador (Cajero):
- * - BÃºsqueda de productos por nombre o cÃ³digo de barras (con soporte de pistola lÃ¡ser).
- * - Manejo del carrito de compras (adiciÃ³n, cantidades, eliminaciÃ³n).
- * - CÃ¡lculo de subtotales, descuentos aplicados e importe total.
- * - ValidaciÃ³n de stock y selecciÃ³n de medio de cobro.
- * - EmisiÃ³n de tickets de venta con persistencia en cola local si se encuentra offline.
+ * Contiene toda la lógica de negocio para la terminal de mostrador (Cajero):
+ * - Búsqueda de productos por nombre o código de barras (con soporte de pistola láser).
+ * - Manejo del carrito de compras (adición, cantidades, eliminación).
+ * - Cálculo de subtotales, descuentos aplicados e importe total.
+ * - Validación de stock y selección de medio de cobro.
+ * - Emisión de tickets de venta con persistencia en cola local si se encuentra offline.
  */
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
@@ -27,7 +27,7 @@ import { db } from '../db';
 import { useCajaController } from './useCajaController';
 
 export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: () => void, usuarioAutenticado?: Empleado | null) {
-  // CatÃ¡logo local reactivo desde IndexedDB
+  // Catálogo local reactivo desde IndexedDB
   const productosDb = useLiveQuery(() => db.productos.toArray(), []);
   const clientesDb = useLiveQuery(() => db.clientes.toArray(), []);
   
@@ -41,7 +41,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
   // Cliente actualmente seleccionado (por defecto: Consumidor Final)
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente>(CLIENTES_MOCK[0]);
 
-  // Actualizamos el cliente seleccionado si cambian los clientes en IndexedDB y aÃºn tiene el mock inicial
+  // Actualizamos el cliente seleccionado si cambian los clientes en IndexedDB y aún tiene el mock inicial
   useEffect(() => {
     if (clientesDb && clientesDb.length > 0) {
       setClienteSeleccionado(prev => {
@@ -51,10 +51,10 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
     }
   }, [clientesDb]);
 
-  // Ãtems presentes en el carrito / ticket en curso
+  // Ítems presentes en el carrito / ticket en curso
   const [itemsCarrito, setItemsCarrito] = useState<ItemCarrito[]>([]);
 
-  // TÃ©rmino de bÃºsqueda en mostrador
+  // Término de búsqueda en mostrador
   const [busqueda, setBusqueda] = useState<string>('');
 
   // Porcentaje de descuento opcional (0% a 100%)
@@ -64,13 +64,13 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('EFECTIVO');
 
 
-  // Monto con el que abona el cliente para cÃ¡lculo automÃ¡tico de vuelto
+  // Monto con el que abona el cliente para cálculo automático de vuelto
   const [montoRecibido, setMontoRecibido] = useState<number>(0);
 
-  // Ãšltimo comprobante generado para visualizaciÃ³n e impresiÃ³n
+  // Último comprobante generado para visualización e impresión
   const [ticketEmitido, setTicketEmitido] = useState<VentaRealizada | null>(null);
 
-  // Mensaje de notificaciÃ³n o alerta en pantalla
+  // Mensaje de notificación o alerta en pantalla
   const [mensajeNotificacion, setMensajeNotificacion] = useState<string | null>(null);
 
   /**
@@ -84,7 +84,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
   }, []);
 
   /**
-   * CatÃ¡logo filtrado segÃºn el texto ingresado en el buscador rÃ¡pido.
+   * Catálogo filtrado según el texto ingresado en el buscador rápido.
    */
   const productosFiltrados = useMemo(() => {
     const termino = busqueda.trim().toLowerCase();
@@ -105,7 +105,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
       const indiceExistente = itemsActuales.findIndex(item => item.producto.id === producto.id);
 
       if (indiceExistente >= 0) {
-        // El producto ya estÃ¡ en el ticket: sumamos cantidad
+        // El producto ya está en el ticket: sumamos cantidad
         const itemActual = itemsActuales[indiceExistente];
         const nuevaCantidad = itemActual.cantidad + cantidad;
         
@@ -117,7 +117,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
         };
         return itemsActualizados;
       } else {
-        // Nuevo Ã­tem en el ticket
+        // Nuevo ítem en el ticket
         const precioAplicado = clienteSeleccionado.listaPrecioPorDefecto === 'MAYORISTA' 
           ? producto.precioMayorista 
           : producto.precioVenta;
@@ -137,8 +137,8 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
   }, [clienteSeleccionado, mostrarMensaje]);
 
   /**
-   * Procesa la entrada del lector de cÃ³digo de barras.
-   * Si coincide exactamente con un cÃ³digo EAN, lo agrega automÃ¡ticamente y limpia el input.
+   * Procesa la entrada del lector de código de barras.
+   * Si coincide exactamente con un código EAN, lo agrega automáticamente y limpia el input.
    */
   const procesarCodigoBarra = useCallback((codigo: string) => {
     const codigoLimpio = codigo.trim();
@@ -149,19 +149,19 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
       agregarProductoAlCarrito(productoEncontrado, 1);
       setBusqueda('');
     } else {
-      mostrarMensaje(`âš ï¸ Producto no encontrado para cÃ³digo: ${codigoLimpio}`);
+      mostrarMensaje(` Producto no encontrado para código: ${codigoLimpio}`);
     }
   }, [productos, agregarProductoAlCarrito, mostrarMensaje]);
 
   /**
-   * BÃºsqueda manual de productos para cuando no se puede usar el escÃ¡ner.
-   * Consulta a Dexie filtrando por nombre o descripciÃ³n (lÃ­mite de 10).
+   * Búsqueda manual de productos para cuando no se puede usar el escáner.
+   * Consulta a Dexie filtrando por nombre o descripción (límite de 10).
    */
   const buscarProductosManual = useCallback(async (query: string): Promise<Producto[]> => {
     const termino = query.trim().toLowerCase();
     if (!termino) return [];
     
-    // Filtrado en memoria de IndexedDB y lÃ­mite de resultados
+    // Filtrado en memoria de IndexedDB y límite de resultados
     const resultados = await db.productos
       .filter(p => p.nombre.toLowerCase().includes(termino) || p.codigoBarras.includes(termino))
       .limit(10)
@@ -190,7 +190,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
   }, []);
 
   /**
-   * Permite escribir un valor numÃ©rico exacto en la columna de cantidad.
+   * Permite escribir un valor numérico exacto en la columna de cantidad.
    */
   const establecerCantidadExacta = useCallback((productoId: string, cantidad: number) => {
     const cantidadSegura = Math.max(1, cantidad);
@@ -209,7 +209,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
   }, []);
 
   /**
-   * Elimina un Ã­tem especÃ­fico del carrito de compras.
+   * Elimina un ítem específico del carrito de compras.
    */
   const eliminarItem = useCallback((productoId: string) => {
     setItemsCarrito(itemsActuales => 
@@ -227,7 +227,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
   }, []);
 
   /**
-   * CÃ¡lculos financieros del ticket: Subtotal, Descuento y Total a pagar.
+   * Cálculos financieros del ticket: Subtotal, Descuento y Total a pagar.
    */
   const calculosFinancieros = useMemo(() => {
     const subtotal = itemsCarrito.reduce((acc, item) => acc + item.subtotal, 0);
@@ -246,20 +246,21 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
   }, [itemsCarrito, descuentoPorcentaje, montoRecibido]);
 
   /**
-   * Confirma la venta, descuenta stock del catÃ¡logo local en IndexedDB y emite el comprobante.
+   * Confirma la venta, descuenta stock del catálogo local en IndexedDB y emite el comprobante.
    * Si hay saldo pendiente y el cliente no es final, lo asienta en Cuenta Corriente.
-   * Si estÃ¡ offline, marca el ticket como 'PENDIENTE_SYNC' y lo encola en sync_outbox.
+   * Si está offline, marca el ticket como 'PENDIENTE_SYNC' y lo encola en sync_outbox.
    */
   const procesarVenta = useCallback(async (clienteId: string, montoAbonado: number, totalVenta: number) => {
     if (itemsCarrito.length === 0) {
-      mostrarMensaje('âš ï¸ El ticket estÃ¡ vacÃ­o. Agregue productos antes de cobrar.');
+      mostrarMensaje(' El ticket está vacío. Agregue productos antes de cobrar.');
       return;
     }
 
     const clienteSelecc = clientes.find(c => c.id === clienteId) || clienteSeleccionado;
+    const esConsumidorFinalAnonimo = !clienteSelecc || clienteSelecc.id === 'cli-001' || clienteSelecc.nombre === 'Consumidor Final Mostrador' || clienteSelecc.nombre === 'Consumidor Final';
     
-    if (metodoPago === 'CUENTA_CORRIENTE' && clienteSelecc.tipo === 'CONSUMIDOR_FINAL') {
-      mostrarMensaje('âš ï¸ No se puede fiar a un Consumidor Final. Seleccione un cliente registrado.');
+    if (metodoPago === 'CUENTA_CORRIENTE' && esConsumidorFinalAnonimo) {
+      mostrarMensaje(' No se puede fiar a un Consumidor Final. Seleccione un cliente registrado.');
       return;
     }
 
@@ -269,11 +270,11 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
 
     // Cálculo de vuelto y saldo a CC
     const vueltoCalculado = montoAbonado > totalVenta ? montoAbonado - totalVenta : 0;
-    const saldoCC = montoAbonado < totalVenta && clienteSelecc.tipo !== 'CONSUMIDOR_FINAL'
+    const saldoCC = montoAbonado < totalVenta && !esConsumidorFinalAnonimo
       ? totalVenta - montoAbonado
       : 0;
 
-    // GeneraciÃ³n del comprobante de venta
+    // Generación del comprobante de venta
     const nuevoTicket: VentaRealizada & { empresa_id?: string | number } = {
       id: `venta-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       empresa_id: parseInt(empresaIdStr, 10) || empresaIdStr,
@@ -298,9 +299,9 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
     };
 
     try {
-      // TransacciÃ³n atÃ³mica en IndexedDB
+      // Transacción atómica en IndexedDB
       await db.transaction('rw', db.productos, db.ventas, db.sync_outbox, db.clientes, async () => {
-        // 1. Descontamos stock fÃ­sico en IndexedDB para cada Ã­tem vendido
+        // 1. Descontamos stock físico en IndexedDB para cada ítem vendido
         for (const item of itemsCarrito) {
           const prodDb = await db.productos.get(item.producto.id);
           if (prodDb) {
@@ -310,7 +311,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
         }
 
         // 2. Si hay remanente a Cuenta Corriente
-        if (montoAbonado < totalVenta && clienteSelecc.tipo !== 'CONSUMIDOR_FINAL') {
+        if (montoAbonado < totalVenta && !esConsumidorFinalAnonimo) {
           const deuda = totalVenta - montoAbonado;
           const cliDb = await db.clientes.get(clienteSelecc.id);
           if (cliDb) {
@@ -366,14 +367,14 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
   ]);
 
   /**
-   * Cierra el diÃ¡logo/modal del ticket impreso.
+   * Cierra el diálogo/modal del ticket impreso.
    */
   const cerrarModalTicket = useCallback(() => {
     setTicketEmitido(null);
   }, []);
 
   return {
-    // Estado del catÃ¡logo y bÃºsqueda
+    // Estado del catálogo y búsqueda
     productos: productosFiltrados,
     catalogoCompleto: productos,
     busqueda,
@@ -394,7 +395,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
     eliminarItem,
     vaciarCarrito,
 
-    // LiquidaciÃ³n financiera
+    // Liquidación financiera
     descuentoPorcentaje,
     setDescuentoPorcentaje,
     metodoPago,
@@ -403,7 +404,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
     setMontoRecibido,
     calculosFinancieros,
 
-    // EmisiÃ³n de ticket
+    // Emisión de ticket
     procesarVenta,
     ticketEmitido,
     cerrarModalTicket,

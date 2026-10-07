@@ -56,6 +56,30 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
   const [montoAbonado, setMontoAbonado] = useState<number | ''>(0);
   const [errorCobro, setErrorCobro] = useState('');
 
+  // --- BUSCADOR PREDICTIVO CLIENTES ---
+  const [busquedaCliente, setBusquedaCliente] = useState('');
+  const [mostrarDropdownClientes, setMostrarDropdownClientes] = useState(false);
+  const clienteWrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (clienteWrapperRef.current && !clienteWrapperRef.current.contains(event.target as Node)) {
+        setMostrarDropdownClientes(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [clienteWrapperRef]);
+
+  const clientesFiltrados = React.useMemo(() => {
+    if (!busquedaCliente) return controlador.clientes;
+    const q = busquedaCliente.toLowerCase();
+    return controlador.clientes.filter(c => 
+      c.nombre.toLowerCase().includes(q) || 
+      (c.documento && c.documento.includes(q))
+    );
+  }, [busquedaCliente, controlador.clientes]);
+
   // â”€â”€â”€ Control de Caja: Apertura y Bloqueo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const cajaController = useCajaController();
   const [nombreCajero, setNombreCajero] = useState('');
@@ -198,12 +222,12 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
       )}
 
       {/* =====================================================================
-          COLUMNA IZQUIERDA: BUSCADOR TERMINAL, PISTOLA LÃSER Y TABLA DE ITEMS
+          COLUMNA IZQUIERDA: BUSCADOR TERMINAL, PISTOLA LÁSER Y TABLA DE ITEMS
           ===================================================================== */}
       <div className="flex-1 flex flex-col gap-4 overflow-hidden min-w-0">
         
         {/* ===================================================================
-            1. SCANNER & ACCESOS RÃPIDOS DE SUPERMERCADO
+            1. SCANNER & ACCESOS RÁPIDOS DE SUPERMERCADO
             =================================================================== */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-lg shadow-teal-900/5 shrink-0 space-y-3">
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
@@ -267,7 +291,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
               type="text"
               value={busquedaManual}
               onChange={(e) => setBusquedaManual(e.target.value)}
-              placeholder="ðŸ” Buscar producto por nombre o descripción..."
+              placeholder=" Buscar producto por nombre o descripción..."
               className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200/90 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 outline-hidden transition-all shadow-2xs"
             />
             
@@ -320,7 +344,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
             <div className="flex items-center gap-2.5">
               <span className="h-2.5 w-2.5 rounded-full bg-teal-500" />
               <span className="font-bold text-slate-900 tracking-tight text-sm">TICKET DE VENTA EN CURSO</span>
-              <span className="text-slate-300">â€¢</span>
+              <span className="text-slate-300">•</span>
               <span className="text-teal-700 font-bold text-xs bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-100">
                 {controlador.itemsCarrito.length} renglones
               </span>
@@ -346,7 +370,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
                   <Barcode className="h-8 w-8 text-teal-600" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-bold text-slate-800">Ticket Vacío â€¢ Listo para Escanear</p>
+                  <p className="text-sm font-bold text-slate-800">Ticket Vacío • Listo para Escanear</p>
                   <p className="text-xs text-slate-500 mt-1 max-w-sm">Dispare con la pistola láser sobre el código de barras o use los botones de artículos frecuentes arriba.</p>
                 </div>
               </div>
@@ -382,9 +406,9 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 font-mono">
                           <span className="text-teal-700 font-semibold">{item.producto.codigoBarra}</span>
-                          <span>â€¢</span>
+                          <span>•</span>
                           <span className="text-slate-600 font-sans">{item.producto.categoria}</span>
-                          <span>â€¢</span>
+                          <span>•</span>
                           <span className={`font-medium ${
                             item.producto.stockActual <= 10 ? 'text-amber-600 font-bold' : 'text-slate-500'
                           }`}>
@@ -486,25 +510,87 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
           <label className="text-slate-700 font-sans text-xs font-bold uppercase tracking-wider block">
             Cliente / Destinatario:
           </label>
-          <select
-            id="pos-select-cliente"
-            value={controlador.clienteSeleccionado?.id ?? ''}
-            onChange={(e) => {
-              const cli = controlador.clientes.find(c => c.id === e.target.value);
-              if (cli) controlador.setClienteSeleccionado(cli);
-            }}
-            className="w-full bg-slate-50 text-slate-800 border border-slate-200/90 rounded-xl p-3 text-xs font-bold font-sans outline-hidden focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all cursor-pointer shadow-2xs"
-          >
-            {controlador.clientes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre} ({c.tipo}) {c.saldoCuentaCorriente < 0 ? `â€¢ Deuda: $${Math.abs(c.saldoCuentaCorriente)}` : ''}
-              </option>
-            ))}
-          </select>
+                    <div className="relative" ref={clienteWrapperRef}>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar por nombre o DNI/CUIT..."
+                value={mostrarDropdownClientes ? busquedaCliente : (controlador.clienteSeleccionado?.nombre || 'Consumidor Final')}
+                onFocus={() => {
+                  setBusquedaCliente('');
+                  setMostrarDropdownClientes(true);
+                }}
+                onChange={(e) => {
+                  setBusquedaCliente(e.target.value);
+                  setMostrarDropdownClientes(true);
+                }}
+                className="w-full pl-9 pr-8 bg-slate-50 text-slate-800 border border-slate-200/90 rounded-xl p-3 text-xs font-bold font-sans outline-hidden focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all shadow-2xs"
+              />
+              {controlador.clienteSeleccionado && controlador.clienteSeleccionado.id !== 'cli-001' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const consumidorFinal = controlador.clientes.find(c => c.id === 'cli-001' || c.nombre === 'Consumidor Final Mostrador');
+                    if (consumidorFinal) {
+                      controlador.setClienteSeleccionado(consumidorFinal);
+                    }
+                    setBusquedaCliente('');
+                    setMostrarDropdownClientes(false);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                  title="Volver a Consumidor Final"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {mostrarDropdownClientes && (
+              <div className="absolute z-50 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden flex flex-col p-1 animate-in fade-in slide-in-from-top-1">
+                {clientesFiltrados.length === 0 ? (
+                  <div className="p-3 text-center text-xs text-slate-500 font-bold">
+                    No se encontraron clientes.
+                  </div>
+                ) : (
+                  clientesFiltrados.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        controlador.setClienteSeleccionado(c);
+                        const esAnonimo = c.id === 'cli-001' || c.nombre === 'Consumidor Final Mostrador' || c.nombre === 'Consumidor Final';
+                        if (esAnonimo && controlador.metodoPago === 'CUENTA_CORRIENTE') {
+                          controlador.setMetodoPago('EFECTIVO');
+                        }
+                        setBusquedaCliente('');
+                        setMostrarDropdownClientes(false);
+                      }}
+                      className="text-left px-3 py-2.5 rounded-lg hover:bg-teal-50 hover:text-teal-900 transition-colors cursor-pointer border-b border-slate-50 last:border-0 flex items-center justify-between group"
+                    >
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-bold text-slate-700 group-hover:text-teal-800 truncate">
+                          {c.nombre}
+                        </span>
+                        <span className="text-[10px] font-semibold text-slate-400">
+                          {c.tipo} {c.documento ? `• ${c.documento}` : ''}
+                        </span>
+                      </div>
+                      {c.saldoCuentaCorriente < 0 && (
+                        <span className="shrink-0 ml-2 px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded text-[10px] font-black">
+                          Deuda: ${Math.abs(c.saldoCuentaCorriente)}
+                        </span>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ===================================================================
-            MEDIOS DE PAGO (BOTONES TÃCTILES RÃPIDOS)
+            MEDIOS DE PAGO (BOTONES TÁCTILES RÁPIDOS)
             =================================================================== */}
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-lg shadow-teal-900/5 space-y-3 shrink-0">
           <span className="text-slate-700 font-sans text-xs font-bold uppercase tracking-wider block">
@@ -516,25 +602,36 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
               { id: 'EFECTIVO' as MetodoPago, label: 'Efectivo', icon: Banknote },
               { id: 'DEBITO' as MetodoPago, label: 'Débito', icon: CreditCard },
               { id: 'CREDITO' as MetodoPago, label: 'Crédito', icon: CreditCard },
-              { id: 'TRANSFERENCIA_QR' as MetodoPago, label: 'QR / Transf.', icon: QrCode }].map((pago) => {
+              { id: 'TRANSFERENCIA_QR' as MetodoPago, label: 'QR / Transf.', icon: QrCode },
+              { id: 'CUENTA_CORRIENTE' as MetodoPago, label: 'Cta. Corriente', icon: FileText }
+            ].map((pago) => {
               const Icono = pago.icon;
               const esSeleccionado = controlador.metodoPago === pago.id;
+              const esCtaCte = pago.id === 'CUENTA_CORRIENTE';
+              const esAnonimo = !controlador.clienteSeleccionado || controlador.clienteSeleccionado.id === 'cli-001' || controlador.clienteSeleccionado.nombre === 'Consumidor Final Mostrador' || controlador.clienteSeleccionado.nombre === 'Consumidor Final';
+              const clienteValidoParaCtaCte = !esAnonimo;
+              const estaDeshabilitado = esCtaCte && !clienteValidoParaCtaCte;
+
               return (
-                <button
-                  key={pago.id}
-                  type="button"
-                  onClick={() => controlador.setMetodoPago(pago.id)}
-                  className={`p-3 rounded-xl border flex items-center gap-2.5 transition-all cursor-pointer hover:-translate-y-0.5 active:scale-95 ${
-                    ''
-                  } ${
-                    esSeleccionado
-                      ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white border-transparent shadow-md shadow-teal-600/25 font-black'
-                      : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:border-teal-300 hover:bg-teal-50/40 hover:text-teal-900 shadow-2xs'
-                  }`}
-                >
-                  <Icono className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{pago.label}</span>
-                </button>
+                <div key={pago.id} className="relative group">
+                  <button
+                    type="button"
+                    disabled={estaDeshabilitado}
+                    onClick={() => {
+                      if (!estaDeshabilitado) controlador.setMetodoPago(pago.id);
+                    }}
+                    className={`w-full p-3 rounded-xl border flex items-center gap-2.5 transition-all ${estaDeshabilitado ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-200 text-slate-400' : 'cursor-pointer hover:-translate-y-0.5 active:scale-95'} ${esSeleccionado && !estaDeshabilitado ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white border-transparent shadow-md shadow-teal-600/25 font-black' : !estaDeshabilitado ? 'bg-slate-50 text-slate-700 border-slate-200/80 hover:border-teal-300 hover:bg-teal-50/40 hover:text-teal-900 shadow-2xs' : ''}`}
+                  >
+                    <Icono className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{pago.label}</span>
+                  </button>
+                  {estaDeshabilitado && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[220px] px-2 py-1.5 bg-slate-800 text-white text-[10px] rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 text-center leading-tight whitespace-normal">
+                      Debe seleccionar un cliente registrado para usar Cuenta Corriente
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -568,7 +665,8 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
                 </div>
               );
             }
-            if (abonado < totalFact && controlador.clienteSeleccionado?.tipo !== 'CONSUMIDOR_FINAL') {
+            const esAnonimo = !controlador.clienteSeleccionado || controlador.clienteSeleccionado.id === 'cli-001' || controlador.clienteSeleccionado.nombre === 'Consumidor Final Mostrador' || controlador.clienteSeleccionado.nombre === 'Consumidor Final';
+            if (abonado < totalFact && !esAnonimo) {
               return (
                 <div className="mt-2 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5">
                   <span className="text-xs font-bold text-blue-700 uppercase tracking-wide">A Cuenta Corriente:</span>
@@ -598,10 +696,10 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
             const totalFactura = controlador.calculosFinancieros?.total ?? 0;
             const abonado = montoAbonado === '' ? 0 : Number(montoAbonado);
             const cliente = controlador.clienteSeleccionado;
-            const esConsumidorFinal = !cliente || cliente.tipo === 'CONSUMIDOR_FINAL';
+            const esConsumidorFinalAnonimo = !cliente || cliente.id === 'cli-001' || cliente.nombre === 'Consumidor Final Mostrador' || cliente.nombre === 'Consumidor Final';
 
             // REGLA 1: Consumidor Final no puede deber plata
-            if (esConsumidorFinal && abonado < totalFactura) {
+            if (esConsumidorFinalAnonimo && abonado < totalFactura) {
               setErrorCobro('Debe abonar el monto de la factura para poder emitir la factura.');
               return;
             }
@@ -649,7 +747,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 font-mono text-xs space-y-2 text-slate-700 shadow-inner">
               <div className="text-center pb-2.5 border-b border-dashed border-slate-300 space-y-1">
                 <p className="font-black text-slate-900 text-sm">TOKO SUPERMERCADOS</p>
-                <p className="text-[11px] text-slate-500">CUIT: 30-71234567-8 â€¢ IVA RESP. INSCRIPTO</p>
+                <p className="text-[11px] text-slate-500">CUIT: 30-71234567-8 • IVA RESP. INSCRIPTO</p>
                 <p className="text-[11px] text-slate-600 font-bold">COMPROBANTE: {controlador.ticketEmitido.numeroTicket}</p>
                 <p className="text-[10px] text-slate-400">{new Date(controlador.ticketEmitido.fechaHora).toLocaleString('es-AR')}</p>
               </div>
