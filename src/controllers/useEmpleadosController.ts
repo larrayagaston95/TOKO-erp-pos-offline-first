@@ -65,7 +65,7 @@ export const useEmpleadosController = () => {
     }
   };
 
-  const eliminarEmpleado = async (idEmpleado: number) => {
+  const eliminarEmpleado = async (idEmpleado: string) => {
     try {
       await db.empleados.delete(idEmpleado);
       console.log(`[useEmpleadosController] Empleado ID ${idEmpleado} eliminado.`);

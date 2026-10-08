@@ -208,6 +208,9 @@ export function usePreventaController(estaOnline: boolean, alRegistrarPedidoOffl
       descuentoPorcentaje: 0,
       total: totales.total,
       metodoPago: 'CUENTA_CORRIENTE',
+      montoAbonado: 0,
+      vuelto: 0,
+      saldoAfectadoCC: totales.total,
       estadoSync: estaOnline ? 'SINCRONIZADO' : 'PENDIENTE_SYNC',
       vendedor: 'Preventista en Ruta 01'
     };

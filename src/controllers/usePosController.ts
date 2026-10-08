@@ -283,7 +283,6 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
       tipoOperacion: 'POS_MOSTRADOR',
       cliente: clienteSelecc,
       items: [...itemsCarrito],
-      lineas: [...itemsCarrito],
       subtotal: calculosFinancieros.subtotal,
       descuentoPorcentaje,
       total: totalVenta,

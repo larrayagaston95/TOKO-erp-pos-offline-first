@@ -10,6 +10,8 @@ export interface Categoria {
   empresa_id: string | number;
   descripcion?: string;
   estado?: 'ACTIVO' | 'INACTIVO';
+  rubro_id?: string | number;
+  marca_id?: string | number;
 }
 
 // Datos de semilla para desarrollo local

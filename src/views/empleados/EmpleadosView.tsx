@@ -33,7 +33,7 @@ export const EmpleadosView: React.FC = () => {
     asignarModalAbierto(true);
   };
 
-  const manejarEliminacion = async (idEmpleado: number) => {
+  const manejarEliminacion = async (idEmpleado: string) => {
     if (window.confirm('¿Confirmas que deseas retirar el acceso a este empleado de forma permanente?')) {
       await controlador.eliminarEmpleado(idEmpleado);
     }

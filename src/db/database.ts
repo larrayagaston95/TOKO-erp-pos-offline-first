@@ -126,11 +126,12 @@ export class OmniPosDatabase extends Dexie {
     this.on('populate', () => {
       this.empleados.add({
         id: 'admin-root',
+        empresa_id: 1,
         nombre: 'Administrador',
         usuario: 'admin',
         pinOContrasena: 'admin',
         rol: 'ADMIN'
-      });
+      } as any);
     });
   }
 }

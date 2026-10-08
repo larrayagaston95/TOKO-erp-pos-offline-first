@@ -22,6 +22,11 @@ import {
   AlertCircle,
   CheckCircle2,
   TrendingUp,
+  Layers,
+  Tag,
+  ListTree,
+  Box,
+  Briefcase,
 } from 'lucide-react';
 import { db } from '../../db';
 import { PRODUCTOS_MOCK, Producto, CategoriaProducto } from '../../models';
@@ -83,7 +88,7 @@ interface ComboBuscableProps {
   onAdd: () => void;
   disabled?: boolean;
 }
-const ComboBuscable: React.FC<ComboBuscableProps> = ({ label, value, options, onChange, onAdd }) => {
+const ComboBuscable: React.FC<ComboBuscableProps> = ({ label, value, options, onChange, onAdd, disabled = false }) => {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -174,20 +179,31 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
   const dbSubCategoriasAll = useLiveQuery(() => db.subcategorias.toArray()) || [];
   const dbProveedoresAll = useLiveQuery(() => db.proveedores.toArray()) || [];
 
-  // Lógica de Cascada (filtramos por el ID del padre seleccionado)
+  // Lógica de Cascada Estricta
   const rubroActualId = dbRubros.find(r => r.nombre === form.rubro)?.id;
-  const dbMarcas = dbMarcasAll.filter(m => !rubroActualId || m.rubro_id === rubroActualId);
+  const dbMarcas = rubroActualId ? dbMarcasAll.filter(m => m.rubro_id === rubroActualId) : [];
   
   const marcaActualId = dbMarcasAll.find(m => m.nombre === form.marca)?.id;
-  const dbCategorias = dbCategoriasAll.filter(c => 
-    (!rubroActualId || c.rubro_id === rubroActualId) && 
-    (!marcaActualId || c.marca_id === marcaActualId)
-  );
+  const dbCategorias = marcaActualId ? dbCategoriasAll.filter(c => c.marca_id === marcaActualId) : [];
 
   const categoriaActualId = dbCategoriasAll.find(c => c.nombre === form.categoria)?.id;
-  const dbSubCategorias = dbSubCategoriasAll.filter(s => !categoriaActualId || s.categoria_id === categoriaActualId);
+  const dbSubCategorias = categoriaActualId ? dbSubCategoriasAll.filter(s => s.categoria_id === categoriaActualId) : [];
 
   const handleAddTaxonomy = async (store: 'rubros' | 'categorias' | 'marcas' | 'subcategorias' | 'proveedores', label: string, campoForm: keyof typeof form) => {
+    // Validaciones estrictas de herencia
+    if (store === 'marcas' && !rubroActualId) {
+      alert("Debe seleccionar un Rubro primero para crear una Marca.");
+      return;
+    }
+    if (store === 'categorias' && !marcaActualId) {
+      alert("Debe seleccionar una Marca primero para crear una Categoría.");
+      return;
+    }
+    if (store === 'subcategorias' && !categoriaActualId) {
+      alert("Debe seleccionar una Categoría primero para crear una Subcategoría.");
+      return;
+    }
+
     const valor = window.prompt(`Ingrese el nombre de ${label}:`);
     if (valor && valor.trim() !== '') {
       try {
@@ -196,12 +212,12 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
         if (store === 'proveedores') {
           payload = { razon_social: valor.trim(), empresa_id: 'emp-1' };
         } else if (store === 'marcas') {
-          if (rubroActualId) payload.rubro_id = rubroActualId;
+          payload.rubro_id = rubroActualId;
         } else if (store === 'categorias') {
+          payload.marca_id = marcaActualId;
           if (rubroActualId) payload.rubro_id = rubroActualId;
-          if (marcaActualId) payload.marca_id = marcaActualId;
         } else if (store === 'subcategorias') {
-          if (categoriaActualId) payload.categoria_id = categoriaActualId;
+          payload.categoria_id = categoriaActualId;
         }
 
         await (db[store] as any).add(payload);
@@ -215,8 +231,23 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
 
   const [modalConfirmacionAbierto, setModalConfirmacionAbierto] = useState(false);
 
-  const actualizar = (campo: keyof typeof form, valor: string | number) =>
-    setForm((prev) => ({ ...prev, [campo]: valor }));
+  const actualizar = (campo: keyof typeof form, valor: string | number) => {
+    setForm((prev) => {
+      const next = { ...prev, [campo]: valor };
+      // Limpieza en cascada si cambia un padre
+      if (campo === 'rubro') {
+        next.marca = '';
+        next.categoria = '' as any;
+        next.subCategoria = '';
+      } else if (campo === 'marca') {
+        next.categoria = '' as any;
+        next.subCategoria = '';
+      } else if (campo === 'categoria') {
+        next.subCategoria = '';
+      }
+      return next;
+    });
+  };
 
   const iniciarGuardado = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -382,7 +413,7 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
                   options={dbCategorias.map(c => c.nombre)}
                   onChange={(v) => actualizar('categoria', v as any)}
                   onAdd={() => handleAddTaxonomy('categorias', 'la nueva Categoría', 'categoria')}
-                  disabled={!form.rubro}
+                  disabled={!form.marca}
                 />
                 <ComboBuscable
                   label="Sub-Categoría"
@@ -597,6 +628,169 @@ const ModalEliminar: React.FC<ModalEliminarProps> = ({ producto, onCerrar }) => 
   );
 };
 
+// ─── Componente: Pestaña de Clasificaciones ────────────────────────────────────
+const TabClasificaciones = () => {
+  const [pestana, setPestana] = useState<'rubros' | 'marcas' | 'categorias' | 'subcategorias' | 'proveedores'>('rubros');
+
+  const rubros = useLiveQuery(() => db.rubros.toArray()) ?? [];
+  const marcas = useLiveQuery(() => db.marcas.toArray()) ?? [];
+  const categorias = useLiveQuery(() => db.categorias.toArray()) ?? [];
+  const subcategorias = useLiveQuery(() => db.subcategorias.toArray()) ?? [];
+  const proveedores = useLiveQuery(() => db.proveedores.toArray()) ?? [];
+
+  const productos = useLiveQuery(() => db.productos.toArray()) ?? [];
+
+  const handleEliminar = async (store: string, id: string, nombre: string, count: number) => {
+    if (count > 0) {
+      if (!window.confirm(`Hay ${count} artículo(s) asociado(s) a "${nombre}". ¿Estás seguro de eliminarlo y dejar los artículos sin esta referencia?`)) {
+        return;
+      }
+    } else {
+      if (!window.confirm(`¿Estás seguro de eliminar "${nombre}"? Esta acción no se puede deshacer.`)) {
+        return;
+      }
+    }
+    
+    try {
+      await (db as any)[store].delete(id);
+    } catch (err) {
+      console.error('Error al eliminar', err);
+    }
+  };
+
+  const handleEditar = async (store: string, id: string, nombreActual: string, campoProp: string) => {
+    const nuevoNombre = window.prompt(`Editar nombre de ${nombreActual}:`, nombreActual);
+    if (nuevoNombre && nuevoNombre.trim() !== '' && nuevoNombre !== nombreActual) {
+      try {
+        await (db as any)[store].update(id, { [campoProp]: nuevoNombre.trim() });
+      } catch (err) {
+        console.error('Error al editar', err);
+      }
+    }
+  };
+
+  let data: any[] = [];
+  let parentLabels = (item: any): string => '';
+  let propName = 'nombre';
+  let prodPropName = 'rubro';
+
+  if (pestana === 'rubros') {
+    data = rubros;
+    prodPropName = 'rubro';
+  } else if (pestana === 'marcas') {
+    data = marcas;
+    prodPropName = 'marca';
+    parentLabels = (m) => `Rubro: ${rubros.find(r => r.id === m?.rubro_id)?.nombre ?? 'Sin rubro'}`;
+  } else if (pestana === 'categorias') {
+    data = categorias;
+    prodPropName = 'categoria';
+    parentLabels = (c) => `Rubro: ${rubros.find(r => r.id === c?.rubro_id)?.nombre ?? '-'} | Marca: ${marcas.find(m => m.id === c?.marca_id)?.nombre ?? '-'}`;
+  } else if (pestana === 'subcategorias') {
+    data = subcategorias;
+    prodPropName = 'subCategoria';
+    parentLabels = (s) => `Categoría: ${categorias.find(c => c.id === s?.categoria_id)?.nombre ?? 'Sin categoría'}`;
+  } else if (pestana === 'proveedores') {
+    data = proveedores;
+    propName = 'razon_social';
+    prodPropName = 'proveedor';
+  }
+
+  return (
+    <div className="flex-1 bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      {/* Cabecera / Pestañas */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 gap-4 shrink-0">
+        <div>
+          <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+            <span className="text-xl">🏷️</span> Clasificaciones
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">Gestioná los atributos de tus productos.</p>
+        </div>
+        <div className="flex border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white">
+          {[
+            { id: 'rubros', icon: <Layers className="w-3.5 h-3.5" />, label: 'Rubros' },
+            { id: 'marcas', icon: <Tag className="w-3.5 h-3.5" />, label: 'Marcas' },
+            { id: 'categorias', icon: <ListTree className="w-3.5 h-3.5" />, label: 'Categorías' },
+            { id: 'subcategorias', icon: <Box className="w-3.5 h-3.5" />, label: 'Subcat.' },
+            { id: 'proveedores', icon: <Briefcase className="w-3.5 h-3.5" />, label: 'Prov.' },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setPestana(t.id as any)}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold transition-colors border-r border-slate-100 last:border-r-0 ${
+                pestana === t.id ? 'bg-teal-50 text-teal-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50/50'
+              }`}
+            >
+              {t.icon}
+              <span className="hidden md:inline">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Contenido / Tabla */}
+      {data.length === 0 ? (
+        <div className="p-12 text-center text-slate-400 text-sm font-medium flex-1 flex flex-col items-center justify-center">
+           <span className="text-4xl mb-3 grayscale opacity-50">📂</span>
+           No hay registros guardados en esta sección.
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-2">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <th className="py-2.5 px-4">Nombre</th>
+                {pestana !== 'rubros' && pestana !== 'proveedores' && (
+                  <th className="py-2.5 px-4">Jerarquía Padre</th>
+                )}
+                <th className="py-2.5 px-4 text-center">Artículos Asociados</th>
+                <th className="py-2.5 px-4 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {data.map((item) => {
+                const count = productos.filter((p: any) => p[prodPropName] === item[propName]).length;
+                return (
+                <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
+                  <td className="py-3 px-4 text-sm font-bold text-slate-700">{item[propName]}</td>
+                  {pestana !== 'rubros' && pestana !== 'proveedores' && (
+                    <td className="py-3 px-4 text-xs text-slate-500 font-medium">
+                      {parentLabels(item)}
+                    </td>
+                  )}
+                  <td className="py-3 px-4 text-xs text-slate-500 font-medium text-center">
+                    <span className={`px-2.5 py-1 rounded-full ${count > 0 ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-slate-100 text-slate-400'}`}>
+                      {count}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => handleEditar(pestana, item.id, item[propName], propName)}
+                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        title="Editar"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleEliminar(pestana, item.id, item[propName], count)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Vista Principal ─────────────────────────────────────────────────────────
 export const ProductosView: React.FC = () => {
   const { productos, mensajeNotificacion, eliminarProducto } = useProductosController();
@@ -705,7 +899,7 @@ export const ProductosView: React.FC = () => {
               : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          🏷️ Clasificación y Marcas
+          🏷️ Clasificaciones
         </button>
         <button
           onClick={() => setPestanaActiva('proveedores')}
@@ -854,39 +1048,34 @@ export const ProductosView: React.FC = () => {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2.5 flex-wrap pb-2 sm:pb-0">
-                <button
-                  type="button"
-                  onClick={() => setVerStockCritico(!verStockCritico)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm border whitespace-nowrap ${
-                    verStockCritico 
-                      ? 'bg-amber-100 text-amber-800 border-amber-300 ring-2 ring-amber-500/20' 
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <AlertTriangle className={`h-4 w-4 ${verStockCritico ? 'text-amber-600' : 'text-slate-400'}`} />
-                  <span>⚠️ Ver Stock Crítico</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModalMasivo(true)}
-                  className="px-4 py-2 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:-translate-y-0.5 whitespace-nowrap"
-                >
-                  <TrendingUp className="h-4 w-4" />
-                  <span>Actualización Masiva</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setModalCategoriasAbierto(true)}
-                  className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:-translate-y-0.5 active:scale-95 whitespace-nowrap"
-                >
-                  <span className="text-sm">⚙️</span>
-                  <span>Configurar Rubros</span>
-                </button>
+              <div className="flex flex-1 justify-end items-center gap-4 flex-wrap pb-2 sm:pb-0">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVerStockCritico(!verStockCritico)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm border whitespace-nowrap ${
+                      verStockCritico 
+                        ? 'bg-amber-100 text-amber-800 border-amber-300 ring-2 ring-amber-500/20' 
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <AlertTriangle className={`h-4 w-4 ${verStockCritico ? 'text-amber-600' : 'text-slate-400'}`} />
+                    <span>⚠️ Ver Stock Crítico</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalMasivo(true)}
+                    className="px-4 py-2 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:-translate-y-0.5 whitespace-nowrap"
+                  >
+                    <TrendingUp className="h-4 w-4" />
+                    <span>Actualización Masiva</span>
+                  </button>
+                </div>
+                
                 <button
                   type="button"
                   onClick={() => setModalAlta(true)}
-                  className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-teal-600/20 hover:-translate-y-0.5 active:scale-95 whitespace-nowrap"
+                  className="ml-auto sm:ml-0 px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-teal-600/20 hover:-translate-y-0.5 active:scale-95 whitespace-nowrap"
                 >
                   <Plus className="h-4 w-4" />
                   <span>Nuevo Artículo</span>
@@ -906,7 +1095,7 @@ export const ProductosView: React.FC = () => {
               />
             </div>
           </div>
-          \n      {/* Tabla de Artículos */}
+      {/* Tabla de Artículos */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-lg shadow-teal-900/5 overflow-hidden flex-1 flex flex-col min-h-0">
         <div className="flex-1 overflow-y-auto">
           <table className="w-full text-left border-collapse min-w-[900px]">
@@ -1016,42 +1205,7 @@ export const ProductosView: React.FC = () => {
       )}
 
       {pestanaActiva === 'clasificacion' && (
-        <div className="flex-1 bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm flex flex-col items-center justify-center text-center animate-in fade-in zoom-in-95 duration-200">
-          <div className="w-16 h-16 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center mb-4 border border-teal-100 shadow-inner">
-            <span className="text-2xl">🏷️</span>
-          </div>
-          <h2 className="text-xl font-black text-slate-800 mb-2">Clasificación y Marcas</h2>
-          <p className="text-slate-500 text-sm max-w-md mb-6">
-            Gestioná los atributos de tus productos como Rubros, Categorías, Subcategorías y Marcas para un catálogo más organizado.
-          </p>
-          <button className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-bold shadow-sm transition-all active:scale-95">
-            Configurar Atributos
-          </button>
-          
-          <div className="mt-8 w-full max-w-2xl border border-slate-200/80 rounded-xl overflow-hidden text-left shadow-sm">
-             <table className="w-full text-sm">
-                <thead className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  <tr>
-                    <th className="py-3 px-4">Atributo</th>
-                    <th className="py-3 px-4">Tipo</th>
-                    <th className="py-3 px-4 text-center">Artículos Asociados</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  <tr className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3 px-4 font-bold text-slate-800">Bebidas sin alcohol</td>
-                    <td className="py-3 px-4"><span className="px-2 py-1 bg-slate-100 rounded-md text-[10px] font-medium border border-slate-200/60">Rubro</span></td>
-                    <td className="py-3 px-4 text-center font-mono font-bold text-teal-600">12</td>
-                  </tr>
-                  <tr className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3 px-4 font-bold text-slate-800">Coca-Cola</td>
-                    <td className="py-3 px-4"><span className="px-2 py-1 bg-slate-100 rounded-md text-[10px] font-medium border border-slate-200/60">Marca</span></td>
-                    <td className="py-3 px-4 text-center font-mono font-bold text-teal-600">8</td>
-                  </tr>
-                </tbody>
-             </table>
-          </div>
-        </div>
+        <TabClasificaciones />
       )}
 
       {pestanaActiva === 'proveedores' && (
@@ -1157,10 +1311,6 @@ export const ProductosView: React.FC = () => {
         }}
       />
 
-      <GestorCategoriasModal
-        estaAbierto={modalCategoriasAbierto}
-        alCerrar={() => setModalCategoriasAbierto(false)}
-      />
     </div>
   );
 };
