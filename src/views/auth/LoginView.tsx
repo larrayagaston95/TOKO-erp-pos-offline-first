@@ -12,7 +12,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Eye, EyeOff, LogIn, AlertCircle, Loader2 } from 'lucide-react';
-import logoToko from "../../assets/logo-toko.png";
+import logoToko from "../../assets/logo.jpg";
 
 import { db } from '../../db';
 import { Empleado } from '../../models';

@@ -55,7 +55,7 @@ export const LoginPOSView: React.FC<PropiedadesLoginPOS> = ({ onLoginExitoso }) 
       // 3. Invocación al servicio aislado (Capa de Negocio)
       const servicioAuth = new AuthService();
       const empleadoLogueado = await servicioAuth.iniciarSesionLocal(credencial, pinIngresado);
-      
+
       // 4. Comunicación externa (éxito)
       onLoginExitoso(empleadoLogueado);
     } catch (error: any) {
@@ -69,16 +69,16 @@ export const LoginPOSView: React.FC<PropiedadesLoginPOS> = ({ onLoginExitoso }) 
 
   // --- COMPONENTES AUXILIARES DE VISTA ---
   const renderizarBotonTeclado = (
-    texto: string, 
-    accion: () => void, 
-    colorClase = 'bg-white text-gray-800 hover:bg-gray-100 active:bg-gray-200 shadow-sm border border-gray-100'
+    texto: string,
+    accion: () => void,
+    colorClase = 'bg-gray-50 text-slate-800 border border-gray-200 hover:bg-sky-50 hover:border-sky-300 transition-all active:scale-95 shadow-sm'
   ) => (
     <button
       key={texto}
       type="button"
       onClick={accion}
       disabled={cargando}
-      className={`flex h-20 w-20 items-center justify-center rounded-2xl text-2xl font-bold transition-all active:scale-95 disabled:opacity-50 sm:h-24 sm:w-24 sm:text-3xl ${colorClase}`}
+      className={`flex h-20 w-20 items-center justify-center rounded-2xl text-2xl font-bold disabled:opacity-50 sm:h-24 sm:w-24 sm:text-3xl ${colorClase}`}
     >
       {texto}
     </button>
@@ -86,12 +86,18 @@ export const LoginPOSView: React.FC<PropiedadesLoginPOS> = ({ onLoginExitoso }) 
 
   // --- RENDERIZADO PRINCIPAL (Vista) ---
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
-      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl sm:max-w-md sm:p-8">
-        
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-[#0a2342] to-sky-900 p-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-2xl shadow-black/50 sm:max-w-md sm:p-10">
+
         {/* ENCABEZADO */}
         <header className="mb-6 text-center">
-          <h1 className="text-3xl font-extrabold text-gray-800">Caja POS</h1>
+          <div className="relative h-32 sm:h-40 md:h-44 w-64 sm:w-72 md:w-80 mx-auto mb-4 overflow-hidden bg-transparent">
+            <img 
+              src="/assets/logo-toko3.jpg" 
+              alt="TOKO ERP" 
+              className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-[112%] w-[112%] object-contain mix-blend-multiply contrast-[1.08] brightness-[1.06]" 
+            />
+          </div>
           <p className="mt-1 text-sm font-medium text-gray-500">Ingresa tu credencial y PIN de acceso</p>
         </header>
 
@@ -107,7 +113,7 @@ export const LoginPOSView: React.FC<PropiedadesLoginPOS> = ({ onLoginExitoso }) 
             }}
             disabled={cargando}
             autoComplete="off"
-            className="w-full rounded-2xl border-2 border-gray-200 bg-gray-50 p-4 text-center text-xl font-bold text-gray-700 outline-none transition-all placeholder:font-medium placeholder:text-gray-400 focus:border-blue-500 focus:bg-white"
+            className="w-full rounded-2xl border-2 border-gray-200 bg-gray-50 p-4 text-center text-xl font-bold text-gray-700 outline-none transition-all placeholder:font-medium placeholder:text-gray-400 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 focus:bg-white"
           />
         </div>
 
@@ -117,16 +123,16 @@ export const LoginPOSView: React.FC<PropiedadesLoginPOS> = ({ onLoginExitoso }) 
             {Array.from({ length: LIMITE_PIN }).map((_, index) => {
               const ingresado = index < pinIngresado.length;
               return (
-                <span 
-                  key={index} 
-                  className={`transition-all duration-200 ${ingresado ? 'scale-110 text-blue-600' : 'text-gray-300'}`}
+                <span
+                  key={index}
+                  className={`transition-all duration-200 ${ingresado ? 'scale-110 text-sky-600' : 'text-gray-300'}`}
                 >
                   {ingresado ? '•' : '○'}
                 </span>
               );
             })}
           </div>
-          
+
           <div className="mt-3 min-h-[1.5rem] text-center">
             {mensajeError && (
               <span className="text-sm font-bold text-red-500 animate-pulse">{mensajeError}</span>
@@ -138,17 +144,17 @@ export const LoginPOSView: React.FC<PropiedadesLoginPOS> = ({ onLoginExitoso }) 
         <div className="grid grid-cols-3 place-items-center gap-3 sm:gap-4">
           {/* Fila 1 */}
           {['1', '2', '3'].map(num => renderizarBotonTeclado(num, () => manejarTecla(num)))}
-          
+
           {/* Fila 2 */}
           {['4', '5', '6'].map(num => renderizarBotonTeclado(num, () => manejarTecla(num)))}
-          
+
           {/* Fila 3 */}
           {['7', '8', '9'].map(num => renderizarBotonTeclado(num, () => manejarTecla(num)))}
-          
+
           {/* Fila 4 (Especiales) */}
-          {renderizarBotonTeclado('Borrar', manejarBorrado, 'bg-red-50 text-red-600 hover:bg-red-100 active:bg-red-200 text-base sm:text-lg')}
+          {renderizarBotonTeclado('Borrar', manejarBorrado, 'bg-red-50 text-red-600 hover:bg-red-100 active:bg-red-200 transition-all active:scale-95 text-base sm:text-lg')}
           {renderizarBotonTeclado('0', () => manejarTecla('0'))}
-          {renderizarBotonTeclado('Entrar', manejarEnvio, 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 shadow-md text-base sm:text-lg')}
+          {renderizarBotonTeclado('Entrar', manejarEnvio, 'bg-sky-600 text-white hover:bg-sky-700 active:bg-sky-800 shadow-md transition-all active:scale-95 text-base sm:text-lg')}
         </div>
 
       </div>

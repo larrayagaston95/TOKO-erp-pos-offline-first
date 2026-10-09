@@ -33,7 +33,7 @@ import { Empleado } from '../../models';
 
 export type RolUsuario = 'ADMIN' | 'CAJERO' | 'PREVENTISTA' | 'VENDEDOR' | 'VENTA_LOGISTICA';
 
-export type ModuloActivo = 'pos' | 'ventas' | 'preventa' | 'clientes' | 'productos' | 'configuracion' | 'reportes' | 'caja' | 'empleados';
+export type ModuloActivo = 'pos' | 'ventas' | 'preventa' | 'clientes' | 'productos' | 'configuracion' | 'reportes' | 'caja' | 'empleados' | 'suscripcion' | 'admin_licencias';
 
 interface SidebarProps {
   moduloActivo: ModuloActivo;
@@ -124,6 +124,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ moduloActivo, alSeleccionarMod
         etiqueta: 'Configuración',
         subtitulo: 'Ajustes y Sistema',
         icono: Settings,
+        rolesPermitidos: ['ADMIN']
+      },
+      {
+        id: 'suscripcion',
+        etiqueta: 'Mi Plan SaaS',
+        subtitulo: 'Suscripción y Pagos',
+        icono: Sparkles,
+        rolesPermitidos: ['ADMIN']
+      },
+      {
+        id: 'admin_licencias',
+        etiqueta: 'SuperAdmin',
+        subtitulo: 'Gestión de Tenants',
+        icono: Cpu,
         rolesPermitidos: ['ADMIN']
       }
     ];

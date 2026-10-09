@@ -24,6 +24,8 @@ import { ReportesView } from './views/reportes/ReportesView';
 import { CajaView } from './views/caja/CajaView';
 import { ConfiguracionView } from './views/configuracion/ConfiguracionView';
 import { EmpleadosView } from './views/empleados/EmpleadosView';
+import { SuscripcionView } from './views/configuracion/SuscripcionView';
+import { AdminLicenciasView } from './views/admin/AdminLicenciasView';
 import { SetupTerminalView } from './views/auth/SetupTerminalView';
 import { LoginPOSView } from './views/auth/LoginPOSView';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -104,6 +106,10 @@ export default function App() {
         return 'Control de Caja y Turnos';
       case 'empleados':
         return 'Gestión de Personal & Roles';
+      case 'suscripcion':
+        return 'Mi Plan y Facturación';
+      case 'admin_licencias':
+        return 'Panel SuperAdmin SaaS';
       default:
         return 'TOKO ERP';
     }
@@ -211,6 +217,14 @@ export default function App() {
 
           {moduloActivo === 'empleados' && (
             <EmpleadosView />
+          )}
+
+          {moduloActivo === 'suscripcion' && (
+            <SuscripcionView />
+          )}
+
+          {moduloActivo === 'admin_licencias' && (
+            <AdminLicenciasView />
           )}
         </main>
       </div>
