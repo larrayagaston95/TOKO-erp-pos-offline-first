@@ -1,0 +1,36 @@
+# Ejemplo de configuración - TOKO ERP Backend
+# Copiá este archivo y ajustá los valores. NUNCA commitees credenciales reales.
+
+spring:
+  application:
+    name: toko-erp-backend
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/toko_erp
+    username: postgres
+    password: change-me
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+logging:
+  level:
+    com.toko.erp: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: WARN

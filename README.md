@@ -1,20 +1,25 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# TOKO ERP
 
-# Run and deploy your AI Studio app
+Sistema ERP con punto de venta (POS) offline-first. Frontend en React + Vite (datos locales con Dexie) y backend en Spring Boot + PostgreSQL para la sincronización.
 
-This contains everything you need to run your app locally.
+## Frontend
 
-View your app in AI Studio: https://ai.studio/apps/5559fa1a-a823-4d9b-9a33-e63444506932
+```bash
+npm install
+npm run dev
+```
 
-## Run Locally
+## Backend
 
-**Prerequisites:**  Node.js
+Variables de entorno:
 
+- `DB_PASSWORD` (obligatoria)
+- `DB_USER` (por defecto `postgres`)
+- `DB_URL` (por defecto `jdbc:postgresql://localhost:5432/toko_erp`)
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+El backend escucha en el puerto 8080 (`SERVER_PORT` para cambiarlo).
