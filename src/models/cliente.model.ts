@@ -35,11 +35,17 @@ export interface PagoCuentaCorriente {
 }
 
 /**
+ * UUID fijo del cliente "Consumidor Final" (venta anónima de mostrador).
+ * Debe coincidir con el registro cargado en el backend.
+ */
+export const CONSUMIDOR_FINAL_ID = 'c1000000-0000-4000-8000-000000000001';
+
+/**
  * Clientes de prueba para el funcionamiento inicial del sistema.
  */
 export const CLIENTES_MOCK: Cliente[] = [
   {
-    id: 'cli-001',
+    id: CONSUMIDOR_FINAL_ID,
     codigo: 'CLI-0001',
     nombre: 'Consumidor Final Mostrador',
     documento: '00-00000000-0',
@@ -52,7 +58,7 @@ export const CLIENTES_MOCK: Cliente[] = [
     limiteCredito: 0
   },
   {
-    id: 'cli-002',
+    id: 'c1000000-0000-4000-8000-000000000002',
     codigo: 'CLI-0042',
     nombre: 'Almacén Don Mario',
     documento: '20-28491029-4',
@@ -65,7 +71,7 @@ export const CLIENTES_MOCK: Cliente[] = [
     limiteCredito: 100000.00
   },
   {
-    id: 'cli-003',
+    id: 'c1000000-0000-4000-8000-000000000003',
     codigo: 'CLI-0089',
     nombre: 'Kiosco 24hs La Esquina',
     documento: '27-33104928-1',
@@ -78,7 +84,7 @@ export const CLIENTES_MOCK: Cliente[] = [
     limiteCredito: 80000.00
   },
   {
-    id: 'cli-004',
+    id: 'c1000000-0000-4000-8000-000000000004',
     codigo: 'CLI-0105',
     nombre: 'Supermercado Los Hermanos',
     documento: '30-71092841-8',

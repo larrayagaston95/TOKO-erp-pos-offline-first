@@ -28,6 +28,7 @@ import {
   Box,
   Briefcase,
 } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../db';
 import { PRODUCTOS_MOCK, Producto, CategoriaProducto } from '../../models';
 import { useProductosController } from '../../controllers/useProductosController';
@@ -295,7 +296,7 @@ const ModalProducto: React.FC<ModalProductoProps> = ({ producto, onCerrar }) => 
   const ejecutarGuardado = async () => {
     try {
       const payload: Producto = {
-        id: esEdicion ? producto!.id : `prod-${Date.now()}`,
+        id: esEdicion ? producto!.id : uuidv4(),
         ...form,
         precioVenta: Number(form.precioVenta),
         precioMayorista: Number(form.precioMayorista),

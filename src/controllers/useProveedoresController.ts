@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { db } from '../db';
 import { Proveedor } from '../models/proveedor.model';
+import { v4 as uuidv4 } from 'uuid';
 
 export const useProveedoresController = () => {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -45,7 +46,7 @@ export const useProveedoresController = () => {
 
       const payload: Proveedor = {
         ...data,
-        id: data.id || (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString()),
+        id: data.id || uuidv4(),
         empresa_id: empresaId
       };
 

@@ -27,7 +27,7 @@ export interface Empleado {
  */
 export const EMPLEADOS_MOCK: Empleado[] = [
   {
-    id: 'admin-root',
+    id: 'e1000000-0000-4000-8000-000000000001',
     nombre: 'Administrador',
     usuario: 'admin',
     pinOContrasena: 'admin',
@@ -36,7 +36,7 @@ export const EMPLEADOS_MOCK: Empleado[] = [
     pin_acceso: '0000'
   },
   {
-    id: 'emp-vend-01',
+    id: 'e1000000-0000-4000-8000-000000000002',
     nombre: 'Cajero / Vendedor',
     usuario: 'vendedor',
     pinOContrasena: '1234',

@@ -63,7 +63,7 @@ export function useVentasController() {
   const registrarRetiroEfectivo = async (monto: number, concepto: string) => {
     if (monto <= 0) return;
     const nuevoMovimiento: MovimientoCaja = {
-      id: `mov-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      id: uuidv4(),
       fechaHora: new Date().toISOString(),
       tipo: 'RETIRO',
       monto,

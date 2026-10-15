@@ -125,7 +125,7 @@ export class OmniPosDatabase extends Dexie {
     // Seeder automático al crear la base de datos (cuando está vacía)
     this.on('populate', () => {
       this.empleados.add({
-        id: 'admin-root',
+        id: 'e1000000-0000-4000-8000-000000000001',
         empresa_id: 1,
         nombre: 'Administrador',
         usuario: 'admin',

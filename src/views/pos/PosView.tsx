@@ -32,7 +32,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { usePosController } from '../../controllers/usePosController';
-import { MetodoPago } from '../../models';
+import { MetodoPago, CONSUMIDOR_FINAL_ID } from '../../models';
 import { FacturaLegalPdf } from './FacturaLegalPdf';
 import { TicketComunPdf } from './TicketComunPdf';
 import { PDFViewer } from '@react-pdf/renderer';
@@ -527,11 +527,11 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
                 }}
                 className="w-full pl-9 pr-8 bg-slate-50 text-slate-800 border border-slate-200/90 rounded-xl p-3 text-xs font-bold font-sans outline-hidden focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all shadow-2xs"
               />
-              {controlador.clienteSeleccionado && controlador.clienteSeleccionado.id !== 'cli-001' && (
+              {controlador.clienteSeleccionado && controlador.clienteSeleccionado.id !== CONSUMIDOR_FINAL_ID && (
                 <button
                   type="button"
                   onClick={() => {
-                    const consumidorFinal = controlador.clientes.find(c => c.id === 'cli-001' || c.nombre === 'Consumidor Final Mostrador');
+                    const consumidorFinal = controlador.clientes.find(c => c.id === CONSUMIDOR_FINAL_ID);
                     if (consumidorFinal) {
                       controlador.setClienteSeleccionado(consumidorFinal);
                     }
@@ -559,7 +559,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
                       type="button"
                       onClick={() => {
                         controlador.setClienteSeleccionado(c);
-                        const esAnonimo = c.id === 'cli-001' || c.nombre === 'Consumidor Final Mostrador' || c.nombre === 'Consumidor Final';
+                        const esAnonimo = c.id === CONSUMIDOR_FINAL_ID;
                         if (esAnonimo && controlador.metodoPago === 'CUENTA_CORRIENTE') {
                           controlador.setMetodoPago('EFECTIVO');
                         }
@@ -608,7 +608,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
               const Icono = pago.icon;
               const esSeleccionado = controlador.metodoPago === pago.id;
               const esCtaCte = pago.id === 'CUENTA_CORRIENTE';
-              const esAnonimo = !controlador.clienteSeleccionado || controlador.clienteSeleccionado.id === 'cli-001' || controlador.clienteSeleccionado.nombre === 'Consumidor Final Mostrador' || controlador.clienteSeleccionado.nombre === 'Consumidor Final';
+              const esAnonimo = !controlador.clienteSeleccionado || controlador.clienteSeleccionado.id === CONSUMIDOR_FINAL_ID;
               const clienteValidoParaCtaCte = !esAnonimo;
               const estaDeshabilitado = esCtaCte && !clienteValidoParaCtaCte;
 
@@ -665,7 +665,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
                 </div>
               );
             }
-            const esAnonimo = !controlador.clienteSeleccionado || controlador.clienteSeleccionado.id === 'cli-001' || controlador.clienteSeleccionado.nombre === 'Consumidor Final Mostrador' || controlador.clienteSeleccionado.nombre === 'Consumidor Final';
+            const esAnonimo = !controlador.clienteSeleccionado || controlador.clienteSeleccionado.id === CONSUMIDOR_FINAL_ID;
             if (abonado < totalFact && !esAnonimo) {
               return (
                 <div className="mt-2 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5">
@@ -696,7 +696,7 @@ export const PosView: React.FC<PosViewProps> = ({ controlador, estaOnline, usuar
             const totalFactura = controlador.calculosFinancieros?.total ?? 0;
             const abonado = montoAbonado === '' ? 0 : Number(montoAbonado);
             const cliente = controlador.clienteSeleccionado;
-            const esConsumidorFinalAnonimo = !cliente || cliente.id === 'cli-001' || cliente.nombre === 'Consumidor Final Mostrador' || cliente.nombre === 'Consumidor Final';
+            const esConsumidorFinalAnonimo = !cliente || cliente.id === CONSUMIDOR_FINAL_ID;
 
             // REGLA 1: Consumidor Final no puede deber plata
             if (esConsumidorFinalAnonimo && abonado < totalFactura) {

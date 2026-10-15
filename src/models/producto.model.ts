@@ -45,7 +45,7 @@ export interface Producto {
  */
 export const PRODUCTOS_MOCK: Producto[] = [
   {
-    id: 'prod-001',
+    id: 'a1000000-0000-4000-8000-000000000001',
     codigoBarras: '7790070411802',
     nombre: 'Aceite de Girasol Natura 900ml',
     categoria: 'Almacén',
@@ -58,7 +58,7 @@ export const PRODUCTOS_MOCK: Producto[] = [
     unidadMedida: 'UNIDAD'
   },
   {
-    id: 'prod-002',
+    id: 'a1000000-0000-4000-8000-000000000002',
     codigoBarras: '7791234567890',
     nombre: 'Gaseosa Coca Cola Sabor Original 2.25L',
     categoria: 'Bebidas',
@@ -71,7 +71,7 @@ export const PRODUCTOS_MOCK: Producto[] = [
     unidadMedida: 'UNIDAD'
   },
   {
-    id: 'prod-003',
+    id: 'a1000000-0000-4000-8000-000000000003',
     codigoBarras: '7790895000451',
     nombre: 'Leche Entera La Serenísima 1L Tetrapak',
     categoria: 'Lácteos',
@@ -84,7 +84,7 @@ export const PRODUCTOS_MOCK: Producto[] = [
     unidadMedida: 'UNIDAD'
   },
   {
-    id: 'prod-004',
+    id: 'a1000000-0000-4000-8000-000000000004',
     codigoBarras: '7790040112345',
     nombre: 'Galletitas Chocolinas Bagley 250g',
     categoria: 'Golosinas',
@@ -97,7 +97,7 @@ export const PRODUCTOS_MOCK: Producto[] = [
     unidadMedida: 'UNIDAD'
   },
   {
-    id: 'prod-005',
+    id: 'a1000000-0000-4000-8000-000000000005',
     codigoBarras: '7790010001010',
     nombre: 'Harina de Trigo 000 Pureza 1kg',
     categoria: 'Almacén',
@@ -110,7 +110,7 @@ export const PRODUCTOS_MOCK: Producto[] = [
     unidadMedida: 'UNIDAD'
   },
   {
-    id: 'prod-006',
+    id: 'a1000000-0000-4000-8000-000000000006',
     codigoBarras: '7790310234567',
     nombre: 'Detergente Lavavajillas Magistral 500ml',
     categoria: 'Limpieza',
@@ -123,7 +123,7 @@ export const PRODUCTOS_MOCK: Producto[] = [
     unidadMedida: 'UNIDAD'
   },
   {
-    id: 'prod-007',
+    id: 'a1000000-0000-4000-8000-000000000007',
     codigoBarras: '7790080123456',
     nombre: 'Agua Mineral Villavicencio Sin Gas 1.5L',
     categoria: 'Bebidas',
@@ -136,7 +136,7 @@ export const PRODUCTOS_MOCK: Producto[] = [
     unidadMedida: 'UNIDAD'
   },
   {
-    id: 'prod-008',
+    id: 'a1000000-0000-4000-8000-000000000008',
     codigoBarras: '7790020456789',
     nombre: 'Queso Cremoso La Paulina (por kg)',
     categoria: 'Fiambres y Quesos',
@@ -149,7 +149,7 @@ export const PRODUCTOS_MOCK: Producto[] = [
     unidadMedida: 'KG'
   },
   {
-    id: 'prod-009',
+    id: 'a1000000-0000-4000-8000-000000000009',
     codigoBarras: '7790060987654',
     nombre: 'Yerba Mate Playadito con Palo 1kg',
     categoria: 'Almacén',

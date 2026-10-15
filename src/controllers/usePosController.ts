@@ -21,10 +21,13 @@ import {
   MetodoPago, 
   VentaRealizada,
   TipoComprobante,
-  Empleado
+  Empleado,
+  CONSUMIDOR_FINAL_ID
 } from '../models';
 import { db } from '../db';
 import { useCajaController } from './useCajaController';
+import { v4 as uuidv4 } from 'uuid';
+import { siguienteNumeroTicket } from '../services/NumeracionService';
 
 export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: () => void, usuarioAutenticado?: Empleado | null) {
   // Catálogo local reactivo desde IndexedDB
@@ -123,7 +126,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
           : producto.precioVenta;
 
         const nuevoItem: ItemCarrito = {
-          id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          id: uuidv4(),
           producto,
           cantidad,
           precioUnitario: precioAplicado,
@@ -257,7 +260,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
     }
 
     const clienteSelecc = clientes.find(c => c.id === clienteId) || clienteSeleccionado;
-    const esConsumidorFinalAnonimo = !clienteSelecc || clienteSelecc.id === 'cli-001' || clienteSelecc.nombre === 'Consumidor Final Mostrador' || clienteSelecc.nombre === 'Consumidor Final';
+    const esConsumidorFinalAnonimo = !clienteSelecc || clienteSelecc.id === CONSUMIDOR_FINAL_ID;
     
     if (metodoPago === 'CUENTA_CORRIENTE' && esConsumidorFinalAnonimo) {
       mostrarMensaje(' No se puede fiar a un Consumidor Final. Seleccione un cliente registrado.');
@@ -266,7 +269,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
 
     const turnoId = cajaController.turnoActivo?.id;
     const empresaIdStr = localStorage.getItem('toko_empresa_id') || '1';
-    const numeroAleatorio = Math.floor(1000 + Math.random() * 9000);
+    const numeroTicket = siguienteNumeroTicket('T');
 
     // Cálculo de vuelto y saldo a CC
     const vueltoCalculado = montoAbonado > totalVenta ? montoAbonado - totalVenta : 0;
@@ -276,9 +279,9 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
 
     // Generación del comprobante de venta
     const nuevoTicket: VentaRealizada & { empresa_id?: string | number } = {
-      id: `venta-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      id: uuidv4(),
       empresa_id: parseInt(empresaIdStr, 10) || empresaIdStr,
-      numeroTicket: `T0001-000${numeroAleatorio}`,
+      numeroTicket,
       fechaHora: new Date().toISOString(),
       tipoOperacion: 'POS_MOSTRADOR',
       cliente: clienteSelecc,
@@ -325,7 +328,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
         // 4. Si opera offline, registramos en sync_outbox
         if (!estaOnline) {
           await db.sync_outbox.put({
-            id: `outbox-${Date.now()}-${nuevoTicket.id}`,
+            id: uuidv4(),
             tipoOperacion: 'VENTA',
             referenciaId: nuevoTicket.id,
             payload: nuevoTicket as any,

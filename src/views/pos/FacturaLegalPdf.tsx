@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
-import { VentaRealizada } from '../../models';
+import { VentaRealizada, CONSUMIDOR_FINAL_ID } from '../../models';
 
 const styles = StyleSheet.create({
   page: {
@@ -174,7 +174,7 @@ const FacturaContenido = ({ venta, copia, compacto }: { venta: VentaRealizada, c
 
     {/* Datos del Cliente */}
     <View style={styles.receptorBox}>
-      <Text style={styles.textLine}><Text style={styles.boldText}>CUIT/DNI:</Text> {venta.cliente.nombre === 'Consumidor Final' ? '00000000' : (venta.cliente.documento || '20-12345678-9')}</Text>
+      <Text style={styles.textLine}><Text style={styles.boldText}>CUIT/DNI:</Text> {venta.cliente.id === CONSUMIDOR_FINAL_ID ? '00000000' : (venta.cliente.documento || '20-12345678-9')}</Text>
       <Text style={styles.textLine}><Text style={styles.boldText}>Razón Social/Nombre:</Text> {venta.cliente.nombre}</Text>
       <Text style={styles.textLine}><Text style={styles.boldText}>Condición IVA:</Text> Consumidor Final</Text>
       <Text style={styles.textLine}><Text style={styles.boldText}>Domicilio:</Text> -</Text>

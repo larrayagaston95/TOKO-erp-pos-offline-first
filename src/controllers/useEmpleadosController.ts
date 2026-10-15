@@ -2,6 +2,7 @@
 import { useState, useCallback } from 'react';
 import { db } from '../db/database';
 import { Empleado } from '../models/empleado.model';
+import { v4 as uuidv4 } from 'uuid';
 
 export const useEmpleadosController = () => {
   const [empleados, asignarEmpleados] = useState<Empleado[]>([]);
@@ -41,8 +42,7 @@ export const useEmpleadosController = () => {
       }
 
       // 2. Generar clave primaria si es un empleado nuevo
-      const idFinal = empleadoData.id || 
-        (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
+      const idFinal = empleadoData.id || uuidv4();
 
       // 3 y 4. Inyección de dependencias estables (Multi-tenant y Seguridad)
       const empleadoParaGuardar = {

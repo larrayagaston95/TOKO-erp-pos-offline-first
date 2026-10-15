@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { db } from '../db';
 import { Categoria } from '../models/categoria.model';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * ============================================================================
@@ -58,7 +59,7 @@ export const useCategoriasController = () => {
       const empresaId = parseInt(empresaIdStr, 10) || empresaIdStr;
 
       const nuevaCategoria: Categoria = {
-        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+        id: uuidv4(),
         nombre,
         empresa_id: empresaId,
         estado: 'ACTIVO'

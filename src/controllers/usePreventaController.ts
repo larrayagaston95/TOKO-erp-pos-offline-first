@@ -23,6 +23,8 @@ import {
   VentaRealizada 
 } from '../models';
 import { db } from '../db';
+import { v4 as uuidv4 } from 'uuid';
+import { siguienteNumeroTicket } from '../services/NumeracionService';
 
 export function usePreventaController(estaOnline: boolean, alRegistrarPedidoOffline?: () => void) {
   // Catálogo reactivo desde IndexedDB
@@ -115,7 +117,7 @@ export function usePreventaController(estaOnline: boolean, alRegistrarPedidoOffl
         return actualizados;
       } else {
         const nuevo: ItemCarrito = {
-          id: `item-movil-${Date.now()}-${producto.id}`,
+          id: uuidv4(),
           producto,
           cantidad: 1,
           precioUnitario,
@@ -195,10 +197,9 @@ export function usePreventaController(estaOnline: boolean, alRegistrarPedidoOffl
       return;
     }
 
-    const numeroComprobante = Math.floor(10000 + Math.random() * 90000);
     const nuevoPedido: VentaRealizada = {
-      id: `pedido-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      numeroTicket: `PV-${numeroComprobante}`,
+      id: uuidv4(),
+      numeroTicket: siguienteNumeroTicket('PV'),
       fechaHora: new Date().toISOString(),
       tipoOperacion: 'PREVENTA_CALLE',
       tipoComprobante: 'TICKET_X',
@@ -224,7 +225,7 @@ export function usePreventaController(estaOnline: boolean, alRegistrarPedidoOffl
         // Si opera offline, registramos en sync_outbox con estado PENDIENTE
         if (!estaOnline) {
           await db.sync_outbox.put({
-            id: `outbox-${Date.now()}-${nuevoPedido.id}`,
+            id: uuidv4(),
             tipoOperacion: 'PEDIDO_PREVENTA',
             referenciaId: nuevoPedido.id,
             payload: nuevoPedido,
