@@ -15,7 +15,7 @@
  * para actualizar el estado local en Dexie/IndexedDB.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 
@@ -48,10 +48,12 @@ interface SyncPushResponse {
 // Para desarrollo local: definir VITE_BACKEND_URL=http://localhost:8080 en .env
 // Para producción: apuntar a la instancia Spring Boot desplegada.
 //
-// Endpoint principal:  /api/sync  (compatible con el backend Spring Boot del proyecto)
-// Endpoint extendido:  /api/v1/sync/push (alias alternativo con versionado)
+// Endpoint: POST /api/v1/sync/push (SincronizacionController en Spring Boot)
 const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL as string | undefined) ?? 'http://localhost:8080';
-const SYNC_ENDPOINT = `${BACKEND_URL}/api/sync`;
+const SYNC_ENDPOINT = `${BACKEND_URL}/api/v1/sync/push`;
+
+// Intervalo del ciclo automático de sincronización mientras hay conexión
+const INTERVALO_SYNC_MS = 30_000;
 
 // ─── Hook principal ───────────────────────────────────────────────────────────
 
@@ -69,6 +71,9 @@ export function useRedController() {
   );
 
   const operacionesPendientes = operacionesPendientesDb ?? 0;
+
+  // Guard contra ejecuciones simultáneas del sincronizador (intervalo + evento 'online' + botón manual)
+  const sincronizacionEnCursoRef = useRef<boolean>(false);
 
   useEffect(() => {
     /** Manejador para el evento cuando se restablece la conexión a internet. */
@@ -142,6 +147,31 @@ export function useRedController() {
    * @returns Número de ventas sincronizadas exitosamente en esta llamada
    */
   const sincronizarColaOffline = useCallback(async (): Promise<number> => {
+    // Si ya hay un ciclo en curso, no iniciamos otro
+    if (sincronizacionEnCursoRef.current) return 0;
+    sincronizacionEnCursoRef.current = true;
+
+    try {
+      return await ejecutarCicloDeSincronizacion();
+    } finally {
+      sincronizacionEnCursoRef.current = false;
+    }
+  }, []);
+
+  /**
+   * Un ciclo completo de envío de la cola. Lo invoca sincronizarColaOffline,
+   * que garantiza que no corran dos ciclos a la vez.
+   */
+  async function ejecutarCicloDeSincronizacion(): Promise<number> {
+
+    // ── 0. Recuperar envíos interrumpidos ──────────────────────────────────
+    // Si la pestaña se cerró a mitad de un envío, quedan ítems en EN_PROCESO
+    // que nunca volverían a enviarse. Como hay un solo ciclo activo (guard),
+    // cualquier EN_PROCESO en este punto está huérfano: lo devolvemos a PENDIENTE.
+    await db.sync_outbox
+      .where('estado')
+      .equals('EN_PROCESO')
+      .modify({ estado: 'PENDIENTE' });
 
     // ── 1. Leer cola de pendientes ─────────────────────────────────────────
     const pendientes = await db.sync_outbox
@@ -198,6 +228,8 @@ export function useRedController() {
         descuentoPorcentaje: v.descuentoPorcentaje,
         total:               v.total,
         metodoPago:          v.metodoPago,
+        montoAbonado:        v.montoAbonado,
+        saldoAfectadoCC:     v.saldoAfectadoCC,
         vendedor:            v.vendedor,
       };
     });
@@ -303,7 +335,33 @@ export function useRedController() {
 
       return 0;
     }
-  }, []); // Sin dependencias: usa solo db (singleton estable) y constantes de módulo
+  }
+
+  /**
+   * Sincronización automática:
+   * - al montar (o al recuperar conexión efectiva),
+   * - cuando el navegador dispara el evento 'online',
+   * - y cada INTERVALO_SYNC_MS mientras haya conexión.
+   * Si el modo offline forzado está activo, no se sincroniza automáticamente.
+   */
+  useEffect(() => {
+    if (!estadoEfectivoOnline) return;
+
+    const dispararSincronizacion = () => {
+      sincronizarColaOffline().catch(error =>
+        console.error('[Sync] Error inesperado en el ciclo automático:', error)
+      );
+    };
+
+    dispararSincronizacion();
+    window.addEventListener('online', dispararSincronizacion);
+    const intervalo = window.setInterval(dispararSincronizacion, INTERVALO_SYNC_MS);
+
+    return () => {
+      window.removeEventListener('online', dispararSincronizacion);
+      window.clearInterval(intervalo);
+    };
+  }, [estadoEfectivoOnline, sincronizarColaOffline]);
 
   /**
    * Alias para uso desde la vista de Configuración.

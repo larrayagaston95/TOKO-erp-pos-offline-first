@@ -189,7 +189,7 @@ export function usePreventaController(estaOnline: boolean, alRegistrarPedidoOffl
 
   /**
    * Confirma y emite el pedido en el dispositivo del preventista, guardándolo en IndexedDB.
-   * Si está offline, lo encola en sync_outbox con estado PENDIENTE.
+   * Siempre lo encola en sync_outbox con estado PENDIENTE para que el sincronizador lo envíe.
    */
   const cerrarYConfirmarPedido = useCallback(async () => {
     if (carritoPreventa.length === 0) {
@@ -212,7 +212,8 @@ export function usePreventaController(estaOnline: boolean, alRegistrarPedidoOffl
       montoAbonado: 0,
       vuelto: 0,
       saldoAfectadoCC: totales.total,
-      estadoSync: estaOnline ? 'SINCRONIZADO' : 'PENDIENTE_SYNC',
+      // Siempre pendiente: solo el sincronizador lo marca SINCRONIZADO al confirmar el backend
+      estadoSync: 'PENDIENTE_SYNC',
       vendedor: 'Preventista en Ruta 01'
     };
 
@@ -222,18 +223,16 @@ export function usePreventaController(estaOnline: boolean, alRegistrarPedidoOffl
         // Guardamos la transacción en 'ventas'
         await db.ventas.put(nuevoPedido);
 
-        // Si opera offline, registramos en sync_outbox con estado PENDIENTE
-        if (!estaOnline) {
-          await db.sync_outbox.put({
-            id: uuidv4(),
-            tipoOperacion: 'PEDIDO_PREVENTA',
-            referenciaId: nuevoPedido.id,
-            payload: nuevoPedido,
-            estado: 'PENDIENTE',
-            fechaCreacion: new Date().toISOString(),
-            intentos: 0
-          });
-        }
+        // Encolamos SIEMPRE en sync_outbox (online u offline)
+        await db.sync_outbox.put({
+          id: uuidv4(),
+          tipoOperacion: 'PEDIDO_PREVENTA',
+          referenciaId: nuevoPedido.id,
+          payload: nuevoPedido,
+          estado: 'PENDIENTE',
+          fechaCreacion: new Date().toISOString(),
+          intentos: 0
+        });
       });
 
       if (!estaOnline && alRegistrarPedidoOffline) {
@@ -246,8 +245,8 @@ export function usePreventaController(estaOnline: boolean, alRegistrarPedidoOffl
 
       mostrarNotificacion(
         estaOnline 
-          ? '✓ Pedido de preventa enviado y guardado en IndexedDB.' 
-          : '✓ Pedido guardado en IndexedDB y encolado en sync_outbox (Modo Offline).'
+          ? '✓ Pedido registrado. Se sincronizará con el servidor.'
+          : '✓ Pedido registrado sin conexión. Se sincronizará al volver la red.'
       );
     } catch (error) {
       console.error('[Preventa] Error al guardar pedido en IndexedDB:', error);

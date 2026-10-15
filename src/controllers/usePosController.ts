@@ -251,7 +251,7 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
   /**
    * Confirma la venta, descuenta stock del catálogo local en IndexedDB y emite el comprobante.
    * Si hay saldo pendiente y el cliente no es final, lo asienta en Cuenta Corriente.
-   * Si está offline, marca el ticket como 'PENDIENTE_SYNC' y lo encola en sync_outbox.
+   * Siempre marca el ticket como 'PENDIENTE_SYNC' y lo encola en sync_outbox para el sincronizador.
    */
   const procesarVenta = useCallback(async (clienteId: string, montoAbonado: number, totalVenta: number) => {
     if (itemsCarrito.length === 0) {
@@ -294,7 +294,8 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
       vuelto: vueltoCalculado,
       saldoAfectadoCC: saldoCC,
       tipoComprobante: 'TICKET_X',
-      estadoSync: estaOnline ? 'SINCRONIZADO' : 'PENDIENTE_SYNC',
+      // Siempre pendiente: solo el sincronizador la marca SINCRONIZADO al confirmar el backend
+      estadoSync: 'PENDIENTE_SYNC',
       vendedor: usuarioAutenticado?.nombre || 'Cajero Desconocido',
       empleadoId: usuarioAutenticado?.id,
       turnoId
@@ -325,18 +326,17 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
         // 3. Persistimos la venta
         await db.ventas.put(nuevoTicket as any);
 
-        // 4. Si opera offline, registramos en sync_outbox
-        if (!estaOnline) {
-          await db.sync_outbox.put({
-            id: uuidv4(),
-            tipoOperacion: 'VENTA',
-            referenciaId: nuevoTicket.id,
-            payload: nuevoTicket as any,
-            estado: 'PENDIENTE',
-            fechaCreacion: new Date().toISOString(),
-            intentos: 0
-          });
-        }
+        // 4. Encolamos SIEMPRE en sync_outbox (online u offline).
+        //    El sincronizador automático de useRedController la envía al backend.
+        await db.sync_outbox.put({
+          id: uuidv4(),
+          tipoOperacion: 'VENTA',
+          referenciaId: nuevoTicket.id,
+          payload: nuevoTicket as any,
+          estado: 'PENDIENTE',
+          fechaCreacion: new Date().toISOString(),
+          intentos: 0
+        });
       });
 
       if (!estaOnline && alRegistrarVentaOffline) {
@@ -346,9 +346,9 @@ export function usePosController(estaOnline: boolean, alRegistrarVentaOffline?: 
       setTicketEmitido(nuevoTicket as any);
       vaciarCarrito();
       mostrarMensaje(
-        estaOnline 
-          ? 'âœ“ Venta procesada y sincronizada en IndexedDB exitosamente.' 
-          : 'âœ“ Venta registrada en IndexedDB y encolada (Modo Offline).'
+        estaOnline
+          ? '✓ Venta registrada. Se sincronizará con el servidor.'
+          : '✓ Venta registrada sin conexión. Se sincronizará al volver la red.'
       );
     } catch (error) {
       console.error('[POS] Error al registrar venta en IndexedDB:', error);

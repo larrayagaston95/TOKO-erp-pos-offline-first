@@ -1,3 +1,4 @@
+// TODO: endpoint /api/caja/sincronizar no implementado en el backend. Servicio sin uso.
 /**
  * ============================================================================
  * SERVICIO DE SINCRONIZACIÓN DE CAJA (SincronizacionCajaService.ts)
